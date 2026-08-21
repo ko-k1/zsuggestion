@@ -71,7 +71,7 @@ The integration:
   its candidate with a dimmed description and a right-aligned kind badge
   (`Cmd`, `Hist`, `Native`, `File`, `Dir`, `Opt`, `Sub`, `Value`), the selected
   row carries a full-width background highlight, and a slim scrollbar
-  (`█` thumb over a muted `┆` track) appears on the right edge whenever
+  (`█` thumb over a muted `│` track) appears on the right edge whenever
   candidates exceed the visible window. Long rows preserve the completion
   suffix, rendering as `… suggestion` when the typed command prefix would hide
   it.

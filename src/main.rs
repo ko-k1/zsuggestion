@@ -1110,7 +1110,7 @@ if [[ -o interactive ]] && (( $+commands[zsuggestion] )); then
     (( box_width < 64 )) && description_width=16
     local kind_width=6
     local title_width=$(( box_width - description_width - kind_width - 8 ))
-    local thumb="█" track="┆"
+    local thumb="█" track="│"
     if (( ! _ZSUGGESTION_UTF8_UI )); then
       thumb='#'
       track='|'
