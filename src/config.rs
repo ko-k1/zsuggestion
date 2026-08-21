@@ -168,7 +168,7 @@ pub fn completion_key_sequence(key: &str) -> Result<String> {
                 bail!("completion.key must be ctrl-space or ctrl-a through ctrl-z");
             }
             if matches!(letter, "i" | "j" | "k" | "m" | "n") {
-                bail!("completion.key conflicts with an Aster menu control");
+                bail!("completion.key conflicts with a zsuggestion menu control");
             }
             Ok(format!("^{}", letter.to_ascii_uppercase()))
         }
@@ -176,7 +176,7 @@ pub fn completion_key_sequence(key: &str) -> Result<String> {
 }
 
 pub const DEFAULT_CONFIG: &str = r#"[completion]
-# Aster abstains instead of filling this list with low-confidence candidates.
+# zsuggestion abstains instead of filling this list with low-confidence candidates.
 max_candidates = 8
 
 # Accept the highlighted completion with Ctrl-Space. Also accepts "ctrl-a"
@@ -224,29 +224,29 @@ impl Paths {
             .map(PathBuf::from)
             .context("HOME is not set")?;
 
-        let config_file = env::var_os("ASTER_CONFIG")
+        let config_file = env::var_os("ZSUGGESTION_CONFIG")
             .map(PathBuf::from)
             .unwrap_or_else(|| {
                 env::var_os("XDG_CONFIG_HOME")
                     .map(PathBuf::from)
                     .unwrap_or_else(|| home.join(".config"))
-                    .join("aster/config.toml")
+                    .join("zsuggestion/config.toml")
             });
         let config_file = absolute_path(config_file)?;
 
-        let state_dir = env::var_os("ASTER_STATE_DIR")
+        let state_dir = env::var_os("ZSUGGESTION_STATE_DIR")
             .map(PathBuf::from)
             .unwrap_or_else(|| {
                 env::var_os("XDG_STATE_HOME")
                     .map(PathBuf::from)
                     .unwrap_or_else(|| home.join(".local/state"))
-                    .join("aster")
+                    .join("zsuggestion")
             });
         let state_dir = absolute_path(state_dir)?;
 
-        let socket_file = env::var_os("ASTER_SOCKET")
+        let socket_file = env::var_os("ZSUGGESTION_SOCKET")
             .map(PathBuf::from)
-            .unwrap_or_else(|| state_dir.join("aster.sock"));
+            .unwrap_or_else(|| state_dir.join("zsuggestion.sock"));
         let socket_file = absolute_path(socket_file)?;
 
         Ok(Self {

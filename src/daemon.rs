@@ -64,7 +64,7 @@ pub fn serve(paths: Paths, settings: Settings) -> Result<()> {
                 let commands = Arc::clone(&commands);
                 let shutdown = Arc::clone(&shutdown);
                 let worker = thread::Builder::new()
-                    .name("aster-client".to_owned())
+                    .name("zsuggestion-client".to_owned())
                     .spawn(move || {
                         if let Err(error) = handle_connection(
                             stream,
@@ -75,7 +75,7 @@ pub fn serve(paths: Paths, settings: Settings) -> Result<()> {
                             &commands,
                             &shutdown,
                         ) {
-                            eprintln!("aster: request failed: {error:#}");
+                            eprintln!("zsuggestion: request failed: {error:#}");
                         }
                     })?;
                 workers.push(worker);
@@ -84,7 +84,7 @@ pub fn serve(paths: Paths, settings: Settings) -> Result<()> {
                 thread::sleep(Duration::from_millis(5));
             }
             Err(error) => {
-                eprintln!("aster: failed to accept connection: {error}");
+                eprintln!("zsuggestion: failed to accept connection: {error}");
                 thread::sleep(Duration::from_millis(50));
             }
         }
@@ -115,7 +115,7 @@ fn prepare_socket(path: &Path) -> Result<()> {
         bail!("refusing to replace non-socket path {}", path.display());
     }
     if UnixStream::connect(path).is_ok() {
-        bail!("aster daemon is already running at {}", path.display());
+        bail!("zsuggestion daemon is already running at {}", path.display());
     }
     fs::remove_file(path)
         .with_context(|| format!("failed to remove stale socket {}", path.display()))
@@ -131,7 +131,7 @@ fn acquire_daemon_lock(path: &Path) -> Result<File> {
         .with_context(|| format!("failed to open daemon lock {}", path.display()))?;
     fs::set_permissions(path, fs::Permissions::from_mode(0o600))?;
     file.try_lock_exclusive()
-        .with_context(|| format!("aster daemon is already running for {}", path.display()))?;
+        .with_context(|| format!("zsuggestion daemon is already running for {}", path.display()))?;
     Ok(file)
 }
 
@@ -349,7 +349,7 @@ mod tests {
     #[test]
     fn refuses_to_remove_a_non_socket_path() {
         let directory = tempdir().unwrap();
-        let path = directory.path().join("aster.sock");
+        let path = directory.path().join("zsuggestion.sock");
         fs::write(&path, "keep me").unwrap();
 
         assert!(prepare_socket(&path).is_err());

@@ -8,14 +8,14 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use std::{io, io::Read, io::Write};
 
 use anyhow::{Context, Result, bail};
-use aster::client;
-use aster::config::{Paths, Settings, completion_key_sequence};
-use aster::daemon;
-use aster::protocol::{Request, Response};
+use zsuggestion::client;
+use zsuggestion::config::{Paths, Settings, completion_key_sequence};
+use zsuggestion::daemon;
+use zsuggestion::protocol::{Request, Response};
 use clap::{Parser, Subcommand, ValueEnum};
 
 #[derive(Debug, Parser)]
-#[command(name = "aster", version, about)]
+#[command(name = "zsuggestion", version, about)]
 struct Cli {
     #[command(subcommand)]
     command: Command,
@@ -111,7 +111,7 @@ enum Shell {
 
 fn main() {
     if let Err(error) = run() {
-        eprintln!("aster: {error:#}");
+        eprintln!("zsuggestion: {error:#}");
         std::process::exit(1);
     }
 }
@@ -193,7 +193,7 @@ fn run() -> Result<()> {
             )? {
                 Response::Imported { imported, skipped } => {
                     if !skipped {
-                        eprintln!("aster: imported {imported} history entries");
+                        eprintln!("zsuggestion: imported {imported} history entries");
                     }
                     Ok(())
                 }
@@ -576,7 +576,7 @@ fn doctor(paths: &Paths) -> Result<()> {
     let Response::Pong { version } = response else {
         bail!("unexpected daemon response: {response:?}");
     };
-    println!("aster {version}");
+    println!("zsuggestion {version}");
     println!("config: {}", paths.config_file.display());
     println!("database: {}", paths.database_file.display());
     println!("socket: {}", paths.socket_file.display());
@@ -611,19 +611,19 @@ fn write_completion(response: Response, format: OutputFormat) -> Result<()> {
             }
             for candidate in completion.candidates {
                 let source = match candidate.source {
-                    aster::protocol::CandidateSource::History => "history",
-                    aster::protocol::CandidateSource::Command => "command",
-                    aster::protocol::CandidateSource::Filesystem => "filesystem",
-                    aster::protocol::CandidateSource::Help => "help",
+                    zsuggestion::protocol::CandidateSource::History => "history",
+                    zsuggestion::protocol::CandidateSource::Command => "command",
+                    zsuggestion::protocol::CandidateSource::Filesystem => "filesystem",
+                    zsuggestion::protocol::CandidateSource::Help => "help",
                 };
                 let kind = match candidate.kind {
-                    aster::protocol::CandidateKind::History => "history",
-                    aster::protocol::CandidateKind::Command => "command",
-                    aster::protocol::CandidateKind::File => "file",
-                    aster::protocol::CandidateKind::Directory => "directory",
-                    aster::protocol::CandidateKind::Option => "option",
-                    aster::protocol::CandidateKind::Subcommand => "subcommand",
-                    aster::protocol::CandidateKind::Value => "value",
+                    zsuggestion::protocol::CandidateKind::History => "history",
+                    zsuggestion::protocol::CandidateKind::Command => "command",
+                    zsuggestion::protocol::CandidateKind::File => "file",
+                    zsuggestion::protocol::CandidateKind::Directory => "directory",
+                    zsuggestion::protocol::CandidateKind::Option => "option",
+                    zsuggestion::protocol::CandidateKind::Subcommand => "subcommand",
+                    zsuggestion::protocol::CandidateKind::Value => "value",
                 };
                 for field in [
                     candidate.insert_text.as_str(),
@@ -691,186 +691,186 @@ fn zsh_integration(settings: &Settings) -> Result<String> {
     let menu_width = settings.ui.menu_width.to_string();
     let max_visible = settings.ui.max_visible.to_string();
     let max_candidates = settings.completion.max_candidates.to_string();
-    Ok(r#"# Aster shell integration
-if [[ -o interactive ]] && (( $+commands[aster] )); then
-  typeset -g ASTER_ZSH_LOADED=1
-  typeset -g _ASTER_COMMAND=""
-  typeset -g _ASTER_COMMAND_CWD=""
-  typeset -g _ASTER_MENU_ACTIVE=0
-  typeset -g _ASTER_MENU_INDEX=1
-  typeset -g _ASTER_MENU_START=1
-  typeset -g _ASTER_MENU_BUFFER=""
-  typeset -g _ASTER_MENU_OWNS_DISPLAY=0
-  typeset -g _ASTER_MENU_REQUEST_BUFFER=""
-  typeset -g _ASTER_MENU_REQUEST_CWD=""
-  typeset -g _ASTER_MENU_REQUEST_CURSOR=0
-  typeset -g _ASTER_MENU_REQUEST_FD=-1
-  typeset -g _ASTER_MENU_INFLIGHT_BUFFER=""
-  typeset -g _ASTER_MENU_INFLIGHT_CURSOR=0
-  typeset -g _ASTER_MENU_REQUEST_DIRTY=0
-  typeset -g _ASTER_MENU_REFRESH_TICKS=0
-  typeset -g _ASTER_MENU_RESTORE_INDEX=1
-  typeset -g _ASTER_RESTORE_HIGHLIGHTS=0
-  typeset -g _ASTER_CAPTURE_FOREIGN_HIGHLIGHTS=0
-  typeset -g _ASTER_MENU_TICK_FD=-1
-  typeset -g _ASTER_HAS_ZSELECT=0
-  typeset -g _ASTER_NATIVE_REQUEST_FD=-1
-  typeset -g _ASTER_NATIVE_REQUEST_PID=-1
-  typeset -g _ASTER_NATIVE_REQUEST_TICKS=0
-  typeset -g _ASTER_NATIVE_START_TICKS=0
-  typeset -g _ASTER_NATIVE_REQUESTED=0
-  typeset -g _ASTER_NATIVE_INFLIGHT_BUFFER=""
-  typeset -g _ASTER_NATIVE_INFLIGHT_CURSOR=0
-  typeset -g _ASTER_IN_NATIVE_COMPLETION=0
-  typeset -g _ASTER_IN_BRACKETED_PASTE=0
-  typeset -g _ASTER_FUZZY_ACTIVE=0
-  typeset -g _ASTER_FUZZY_BASE=""
-  typeset -g _ASTER_FUZZY_QUERY=""
-  typeset -g _ASTER_FUZZY_KEYTIMEOUT=-1
-  typeset -g _ASTER_FUZZY_PREVIOUS_KEYMAP=""
-  typeset -g _ASTER_PREVIEW_FD=-1
-  typeset -g _ASTER_PREVIEW_PID=-1
-  typeset -g _ASTER_PREVIEW_TICKS=0
-  typeset -g _ASTER_PREVIEW_TARGET=""
-  typeset -g _ASTER_PREVIEW_PATH=""
-  typeset -g _ASTER_PREVIEW_COMMAND=""
-  typeset -ga _ASTER_PREVIEW_LINES=()
-  typeset -ga _ASTER_PREVIEW_STYLES=()
-  typeset -g _ASTER_UTF8_UI=0
-  typeset -g _ASTER_CHARMAP="${(U)$(command locale charmap 2>/dev/null)}"
-  [[ "$_ASTER_CHARMAP" == *UTF-8* || "$_ASTER_CHARMAP" == *UTF8* ]] && _ASTER_UTF8_UI=1
-  unset _ASTER_CHARMAP
-  typeset -ga _ASTER_MENU_ACCEPTS=()
-  typeset -ga _ASTER_MENU_DISPLAYS=()
-  typeset -ga _ASTER_MENU_DESCRIPTIONS=()
-  typeset -ga _ASTER_MENU_KINDS=()
-  typeset -ga _ASTER_MENU_SOURCES=()
-  typeset -ga _ASTER_FOREIGN_HIGHLIGHTS=()
-  typeset -ga _ASTER_RENDERED_HIGHLIGHTS=()
-  typeset -ga _ASTER_DAEMON_ACCEPTS=()
-  typeset -ga _ASTER_DAEMON_DISPLAYS=()
-  typeset -ga _ASTER_DAEMON_DESCRIPTIONS=()
-  typeset -ga _ASTER_DAEMON_KINDS=()
-  typeset -ga _ASTER_DAEMON_SOURCES=()
-  typeset -ga _ASTER_NATIVE_ACCEPTS=()
-  typeset -ga _ASTER_NATIVE_DISPLAYS=()
-  typeset -ga _ASTER_NATIVE_DESCRIPTIONS=()
+    Ok(r#"# zsuggestion shell integration
+if [[ -o interactive ]] && (( $+commands[zsuggestion] )); then
+  typeset -g ZSUGGESTION_ZSH_LOADED=1
+  typeset -g _ZSUGGESTION_COMMAND=""
+  typeset -g _ZSUGGESTION_COMMAND_CWD=""
+  typeset -g _ZSUGGESTION_MENU_ACTIVE=0
+  typeset -g _ZSUGGESTION_MENU_INDEX=1
+  typeset -g _ZSUGGESTION_MENU_START=1
+  typeset -g _ZSUGGESTION_MENU_BUFFER=""
+  typeset -g _ZSUGGESTION_MENU_OWNS_DISPLAY=0
+  typeset -g _ZSUGGESTION_MENU_REQUEST_BUFFER=""
+  typeset -g _ZSUGGESTION_MENU_REQUEST_CWD=""
+  typeset -g _ZSUGGESTION_MENU_REQUEST_CURSOR=0
+  typeset -g _ZSUGGESTION_MENU_REQUEST_FD=-1
+  typeset -g _ZSUGGESTION_MENU_INFLIGHT_BUFFER=""
+  typeset -g _ZSUGGESTION_MENU_INFLIGHT_CURSOR=0
+  typeset -g _ZSUGGESTION_MENU_REQUEST_DIRTY=0
+  typeset -g _ZSUGGESTION_MENU_REFRESH_TICKS=0
+  typeset -g _ZSUGGESTION_MENU_RESTORE_INDEX=1
+  typeset -g _ZSUGGESTION_RESTORE_HIGHLIGHTS=0
+  typeset -g _ZSUGGESTION_CAPTURE_FOREIGN_HIGHLIGHTS=0
+  typeset -g _ZSUGGESTION_MENU_TICK_FD=-1
+  typeset -g _ZSUGGESTION_HAS_ZSELECT=0
+  typeset -g _ZSUGGESTION_NATIVE_REQUEST_FD=-1
+  typeset -g _ZSUGGESTION_NATIVE_REQUEST_PID=-1
+  typeset -g _ZSUGGESTION_NATIVE_REQUEST_TICKS=0
+  typeset -g _ZSUGGESTION_NATIVE_START_TICKS=0
+  typeset -g _ZSUGGESTION_NATIVE_REQUESTED=0
+  typeset -g _ZSUGGESTION_NATIVE_INFLIGHT_BUFFER=""
+  typeset -g _ZSUGGESTION_NATIVE_INFLIGHT_CURSOR=0
+  typeset -g _ZSUGGESTION_IN_NATIVE_COMPLETION=0
+  typeset -g _ZSUGGESTION_IN_BRACKETED_PASTE=0
+  typeset -g _ZSUGGESTION_FUZZY_ACTIVE=0
+  typeset -g _ZSUGGESTION_FUZZY_BASE=""
+  typeset -g _ZSUGGESTION_FUZZY_QUERY=""
+  typeset -g _ZSUGGESTION_FUZZY_KEYTIMEOUT=-1
+  typeset -g _ZSUGGESTION_FUZZY_PREVIOUS_KEYMAP=""
+  typeset -g _ZSUGGESTION_PREVIEW_FD=-1
+  typeset -g _ZSUGGESTION_PREVIEW_PID=-1
+  typeset -g _ZSUGGESTION_PREVIEW_TICKS=0
+  typeset -g _ZSUGGESTION_PREVIEW_TARGET=""
+  typeset -g _ZSUGGESTION_PREVIEW_PATH=""
+  typeset -g _ZSUGGESTION_PREVIEW_COMMAND=""
+  typeset -ga _ZSUGGESTION_PREVIEW_LINES=()
+  typeset -ga _ZSUGGESTION_PREVIEW_STYLES=()
+  typeset -g _ZSUGGESTION_UTF8_UI=0
+  typeset -g _ZSUGGESTION_CHARMAP="${(U)$(command locale charmap 2>/dev/null)}"
+  [[ "$_ZSUGGESTION_CHARMAP" == *UTF-8* || "$_ZSUGGESTION_CHARMAP" == *UTF8* ]] && _ZSUGGESTION_UTF8_UI=1
+  unset _ZSUGGESTION_CHARMAP
+  typeset -ga _ZSUGGESTION_MENU_ACCEPTS=()
+  typeset -ga _ZSUGGESTION_MENU_DISPLAYS=()
+  typeset -ga _ZSUGGESTION_MENU_DESCRIPTIONS=()
+  typeset -ga _ZSUGGESTION_MENU_KINDS=()
+  typeset -ga _ZSUGGESTION_MENU_SOURCES=()
+  typeset -ga _ZSUGGESTION_FOREIGN_HIGHLIGHTS=()
+  typeset -ga _ZSUGGESTION_RENDERED_HIGHLIGHTS=()
+  typeset -ga _ZSUGGESTION_DAEMON_ACCEPTS=()
+  typeset -ga _ZSUGGESTION_DAEMON_DISPLAYS=()
+  typeset -ga _ZSUGGESTION_DAEMON_DESCRIPTIONS=()
+  typeset -ga _ZSUGGESTION_DAEMON_KINDS=()
+  typeset -ga _ZSUGGESTION_DAEMON_SOURCES=()
+  typeset -ga _ZSUGGESTION_NATIVE_ACCEPTS=()
+  typeset -ga _ZSUGGESTION_NATIVE_DISPLAYS=()
+  typeset -ga _ZSUGGESTION_NATIVE_DESCRIPTIONS=()
 
-  _aster_preexec() {
-    _ASTER_COMMAND="$1"
-    _ASTER_COMMAND_CWD="$PWD"
+  _zsuggestion_preexec() {
+    _ZSUGGESTION_COMMAND="$1"
+    _ZSUGGESTION_COMMAND_CWD="$PWD"
     return 0
   }
 
-  _aster_precmd() {
+  _zsuggestion_precmd() {
     local exit_code=$?
-    if [[ -n "$_ASTER_COMMAND" ]]; then
+    if [[ -n "$_ZSUGGESTION_COMMAND" ]]; then
       local session_id="${HOST:-unknown}:${TMUX_PANE:-${SSH_TTY:-local}}:$$"
-      print -rn -- "$_ASTER_COMMAND" | command aster record \
+      print -rn -- "$_ZSUGGESTION_COMMAND" | command zsuggestion record \
         --stdin \
-        --cwd "$_ASTER_COMMAND_CWD" \
+        --cwd "$_ZSUGGESTION_COMMAND_CWD" \
         --exit-code "$exit_code" \
         --session "$session_id" >/dev/null 2>&1 &!
-      _ASTER_COMMAND=""
-      _ASTER_COMMAND_CWD=""
+      _ZSUGGESTION_COMMAND=""
+      _ZSUGGESTION_COMMAND_CWD=""
     fi
     return 0
   }
 
-  _aster_menu_cancel_query() {
-    local fd="$_ASTER_MENU_REQUEST_FD"
+  _zsuggestion_menu_cancel_query() {
+    local fd="$_ZSUGGESTION_MENU_REQUEST_FD"
     if (( fd >= 0 )); then
       zle -F "$fd" 2>/dev/null
       exec {fd}<&-
     fi
-    _ASTER_MENU_REQUEST_FD=-1
-    _ASTER_MENU_INFLIGHT_BUFFER=""
-    _ASTER_MENU_INFLIGHT_CURSOR=0
+    _ZSUGGESTION_MENU_REQUEST_FD=-1
+    _ZSUGGESTION_MENU_INFLIGHT_BUFFER=""
+    _ZSUGGESTION_MENU_INFLIGHT_CURSOR=0
   }
 
-  _aster_native_cancel() {
-    local fd="$_ASTER_NATIVE_REQUEST_FD"
+  _zsuggestion_native_cancel() {
+    local fd="$_ZSUGGESTION_NATIVE_REQUEST_FD"
     if (( fd >= 0 )); then
       zle -F "$fd" 2>/dev/null
       exec {fd}<&-
     fi
-    if (( _ASTER_NATIVE_REQUEST_PID > 0 )); then
-      kill "$_ASTER_NATIVE_REQUEST_PID" 2>/dev/null
+    if (( _ZSUGGESTION_NATIVE_REQUEST_PID > 0 )); then
+      kill "$_ZSUGGESTION_NATIVE_REQUEST_PID" 2>/dev/null
     fi
-    _ASTER_NATIVE_REQUEST_FD=-1
-    _ASTER_NATIVE_REQUEST_PID=-1
-    _ASTER_NATIVE_REQUEST_TICKS=0
-    _ASTER_NATIVE_START_TICKS=0
-    _ASTER_NATIVE_INFLIGHT_BUFFER=""
-    _ASTER_NATIVE_INFLIGHT_CURSOR=0
+    _ZSUGGESTION_NATIVE_REQUEST_FD=-1
+    _ZSUGGESTION_NATIVE_REQUEST_PID=-1
+    _ZSUGGESTION_NATIVE_REQUEST_TICKS=0
+    _ZSUGGESTION_NATIVE_START_TICKS=0
+    _ZSUGGESTION_NATIVE_INFLIGHT_BUFFER=""
+    _ZSUGGESTION_NATIVE_INFLIGHT_CURSOR=0
   }
 
-  _aster_preview_cancel() {
-    local fd="$_ASTER_PREVIEW_FD"
+  _zsuggestion_preview_cancel() {
+    local fd="$_ZSUGGESTION_PREVIEW_FD"
     if (( fd >= 0 )); then
       zle -F "$fd" 2>/dev/null
       exec {fd}<&-
     fi
-    (( _ASTER_PREVIEW_PID > 0 )) && kill "$_ASTER_PREVIEW_PID" 2>/dev/null
-    _ASTER_PREVIEW_FD=-1
-    _ASTER_PREVIEW_PID=-1
-    _ASTER_PREVIEW_TICKS=0
+    (( _ZSUGGESTION_PREVIEW_PID > 0 )) && kill "$_ZSUGGESTION_PREVIEW_PID" 2>/dev/null
+    _ZSUGGESTION_PREVIEW_FD=-1
+    _ZSUGGESTION_PREVIEW_PID=-1
+    _ZSUGGESTION_PREVIEW_TICKS=0
   }
 
-  _aster_preview_clear() {
-    _aster_preview_cancel
-    _ASTER_PREVIEW_TARGET=""
-    _ASTER_PREVIEW_PATH=""
-    _ASTER_PREVIEW_COMMAND=""
-    _ASTER_PREVIEW_LINES=()
-    _ASTER_PREVIEW_STYLES=()
+  _zsuggestion_preview_clear() {
+    _zsuggestion_preview_cancel
+    _ZSUGGESTION_PREVIEW_TARGET=""
+    _ZSUGGESTION_PREVIEW_PATH=""
+    _ZSUGGESTION_PREVIEW_COMMAND=""
+    _ZSUGGESTION_PREVIEW_LINES=()
+    _ZSUGGESTION_PREVIEW_STYLES=()
   }
 
-  _aster_preview_consider() {
+  _zsuggestion_preview_consider() {
     local display source target path command_name alias_command
     local -a display_words
-    if (( ${COLUMNS:-80} < 100 || ! _ASTER_MENU_ACTIVE )); then
-      _aster_preview_clear
+    if (( ${COLUMNS:-80} < 100 || ! _ZSUGGESTION_MENU_ACTIVE )); then
+      _zsuggestion_preview_clear
       return
     fi
-    display="${_ASTER_MENU_DISPLAYS[$_ASTER_MENU_INDEX]}"
-    source="${_ASTER_MENU_SOURCES[$_ASTER_MENU_INDEX]}"
+    display="${_ZSUGGESTION_MENU_DISPLAYS[$_ZSUGGESTION_MENU_INDEX]}"
+    source="${_ZSUGGESTION_MENU_SOURCES[$_ZSUGGESTION_MENU_INDEX]}"
     target="${source}:${display}"
-    [[ "$target" == "$_ASTER_PREVIEW_TARGET" ]] && return
-    _aster_preview_clear
-    _ASTER_PREVIEW_TARGET="$target"
+    [[ "$target" == "$_ZSUGGESTION_PREVIEW_TARGET" ]] && return
+    _zsuggestion_preview_clear
+    _ZSUGGESTION_PREVIEW_TARGET="$target"
     command_name="${${display%%[[:space:]]*}:t}"
     alias_command="${aliases[ls]:-}"
     if [[ "$command_name" == ls &&
           ( "$alias_command" == eza || "$alias_command" == "eza "* ) ]]; then
-      _ASTER_PREVIEW_COMMAND="${alias_command}${display#$command_name}"
+      _ZSUGGESTION_PREVIEW_COMMAND="${alias_command}${display#$command_name}"
     elif [[ "$command_name" == ls || "$command_name" == gls || "$command_name" == eza ]]; then
-      _ASTER_PREVIEW_COMMAND="$display"
+      _ZSUGGESTION_PREVIEW_COMMAND="$display"
     elif [[ "$source" == native || "$source" == filesystem ]]; then
       display_words=("${(z)display}")
       path="${(Q)display_words[-1]}"
       [[ -n "$path" ]] || return
       [[ "$path" == "~/"* ]] && path="$HOME/${path#\~/}"
-      _ASTER_PREVIEW_PATH="$path"
+      _ZSUGGESTION_PREVIEW_PATH="$path"
     fi
   }
 
-  _aster_preview_ready() {
+  _zsuggestion_preview_ready() {
     local fd="$1" line style response_target
-    local styled=$(( ${#_ASTER_PREVIEW_COMMAND} > 0 ))
+    local styled=$(( ${#_ZSUGGESTION_PREVIEW_COMMAND} > 0 ))
     local -a lines styles
-    if (( fd != _ASTER_PREVIEW_FD )); then
+    if (( fd != _ZSUGGESTION_PREVIEW_FD )); then
       zle -F "$fd" 2>/dev/null
       exec {fd}<&-
       return 0
     fi
     zle -F "$fd"
     if ! IFS= read -r -u "$fd" -d '' response_target ||
-       [[ "$response_target" != "$_ASTER_PREVIEW_TARGET" ]]; then
+       [[ "$response_target" != "$_ZSUGGESTION_PREVIEW_TARGET" ]]; then
       exec {fd}<&-
-      _ASTER_PREVIEW_FD=-1
-      _ASTER_PREVIEW_PID=-1
-      _ASTER_PREVIEW_TICKS=0
+      _ZSUGGESTION_PREVIEW_FD=-1
+      _ZSUGGESTION_PREVIEW_PID=-1
+      _ZSUGGESTION_PREVIEW_TICKS=0
       return 0
     fi
     if (( styled )); then
@@ -888,109 +888,109 @@ if [[ -o interactive ]] && (( $+commands[aster] )); then
       done
     fi
     exec {fd}<&-
-    _ASTER_PREVIEW_FD=-1
-    _ASTER_PREVIEW_PID=-1
-    _ASTER_PREVIEW_TICKS=0
-    _ASTER_PREVIEW_PATH=""
-    _ASTER_PREVIEW_COMMAND=""
+    _ZSUGGESTION_PREVIEW_FD=-1
+    _ZSUGGESTION_PREVIEW_PID=-1
+    _ZSUGGESTION_PREVIEW_TICKS=0
+    _ZSUGGESTION_PREVIEW_PATH=""
+    _ZSUGGESTION_PREVIEW_COMMAND=""
     if (( ${#lines} )); then
-      _ASTER_PREVIEW_LINES=("${lines[@]}")
-      _ASTER_PREVIEW_STYLES=("${styles[@]}")
+      _ZSUGGESTION_PREVIEW_LINES=("${lines[@]}")
+      _ZSUGGESTION_PREVIEW_STYLES=("${styles[@]}")
     else
-      _ASTER_PREVIEW_LINES=("Preview unavailable")
-      _ASTER_PREVIEW_STYLES=("")
+      _ZSUGGESTION_PREVIEW_LINES=("Preview unavailable")
+      _ZSUGGESTION_PREVIEW_STYLES=("")
     fi
-    _aster_menu_publish
+    _zsuggestion_menu_publish
   }
 
-  _aster_menu_cancel_request() {
-    _aster_menu_cancel_query
-    _aster_native_cancel
-    _ASTER_MENU_REQUEST_BUFFER=""
-    _ASTER_MENU_REQUEST_CWD=""
-    _ASTER_MENU_REQUEST_CURSOR=0
-    _ASTER_MENU_REQUEST_DIRTY=0
-    _ASTER_MENU_REFRESH_TICKS=0
-    _ASTER_MENU_RESTORE_INDEX=1
-    _ASTER_NATIVE_REQUESTED=0
-    _ASTER_NATIVE_START_TICKS=0
+  _zsuggestion_menu_cancel_request() {
+    _zsuggestion_menu_cancel_query
+    _zsuggestion_native_cancel
+    _ZSUGGESTION_MENU_REQUEST_BUFFER=""
+    _ZSUGGESTION_MENU_REQUEST_CWD=""
+    _ZSUGGESTION_MENU_REQUEST_CURSOR=0
+    _ZSUGGESTION_MENU_REQUEST_DIRTY=0
+    _ZSUGGESTION_MENU_REFRESH_TICKS=0
+    _ZSUGGESTION_MENU_RESTORE_INDEX=1
+    _ZSUGGESTION_NATIVE_REQUESTED=0
+    _ZSUGGESTION_NATIVE_START_TICKS=0
   }
 
-  _aster_fuzzy_reset() {
-    if (( _ASTER_FUZZY_ACTIVE && _ASTER_FUZZY_KEYTIMEOUT >= 0 )); then
-      KEYTIMEOUT=$_ASTER_FUZZY_KEYTIMEOUT
+  _zsuggestion_fuzzy_reset() {
+    if (( _ZSUGGESTION_FUZZY_ACTIVE && _ZSUGGESTION_FUZZY_KEYTIMEOUT >= 0 )); then
+      KEYTIMEOUT=$_ZSUGGESTION_FUZZY_KEYTIMEOUT
     fi
-    if (( _ASTER_FUZZY_ACTIVE )) && [[ -n "$_ASTER_FUZZY_PREVIOUS_KEYMAP" ]]; then
-      zle -K "$_ASTER_FUZZY_PREVIOUS_KEYMAP" 2>/dev/null
+    if (( _ZSUGGESTION_FUZZY_ACTIVE )) && [[ -n "$_ZSUGGESTION_FUZZY_PREVIOUS_KEYMAP" ]]; then
+      zle -K "$_ZSUGGESTION_FUZZY_PREVIOUS_KEYMAP" 2>/dev/null
     fi
-    _ASTER_FUZZY_ACTIVE=0
-    _ASTER_FUZZY_BASE=""
-    _ASTER_FUZZY_QUERY=""
-    _ASTER_FUZZY_KEYTIMEOUT=-1
-    _ASTER_FUZZY_PREVIOUS_KEYMAP=""
+    _ZSUGGESTION_FUZZY_ACTIVE=0
+    _ZSUGGESTION_FUZZY_BASE=""
+    _ZSUGGESTION_FUZZY_QUERY=""
+    _ZSUGGESTION_FUZZY_KEYTIMEOUT=-1
+    _ZSUGGESTION_FUZZY_PREVIOUS_KEYMAP=""
   }
 
-  _aster_menu_clear() {
+  _zsuggestion_menu_clear() {
     local preserve_buffer="${1:-0}"
-    _aster_menu_cancel_request
-    _ASTER_MENU_ACTIVE=0
-    _ASTER_MENU_INDEX=1
-    _ASTER_MENU_START=1
-    _ASTER_RESTORE_HIGHLIGHTS=0
-    _ASTER_CAPTURE_FOREIGN_HIGHLIGHTS=0
-    _aster_fuzzy_reset
-    _aster_preview_clear
-    (( preserve_buffer )) || _ASTER_MENU_BUFFER=""
-    _ASTER_MENU_ACCEPTS=()
-    _ASTER_MENU_DISPLAYS=()
-    _ASTER_MENU_DESCRIPTIONS=()
-    _ASTER_MENU_KINDS=()
-    _ASTER_MENU_SOURCES=()
-    _ASTER_DAEMON_ACCEPTS=()
-    _ASTER_DAEMON_DISPLAYS=()
-    _ASTER_DAEMON_DESCRIPTIONS=()
-    _ASTER_DAEMON_KINDS=()
-    _ASTER_DAEMON_SOURCES=()
-    _ASTER_NATIVE_ACCEPTS=()
-    _ASTER_NATIVE_DISPLAYS=()
-    _ASTER_NATIVE_DESCRIPTIONS=()
-    if (( _ASTER_MENU_OWNS_DISPLAY )); then
+    _zsuggestion_menu_cancel_request
+    _ZSUGGESTION_MENU_ACTIVE=0
+    _ZSUGGESTION_MENU_INDEX=1
+    _ZSUGGESTION_MENU_START=1
+    _ZSUGGESTION_RESTORE_HIGHLIGHTS=0
+    _ZSUGGESTION_CAPTURE_FOREIGN_HIGHLIGHTS=0
+    _zsuggestion_fuzzy_reset
+    _zsuggestion_preview_clear
+    (( preserve_buffer )) || _ZSUGGESTION_MENU_BUFFER=""
+    _ZSUGGESTION_MENU_ACCEPTS=()
+    _ZSUGGESTION_MENU_DISPLAYS=()
+    _ZSUGGESTION_MENU_DESCRIPTIONS=()
+    _ZSUGGESTION_MENU_KINDS=()
+    _ZSUGGESTION_MENU_SOURCES=()
+    _ZSUGGESTION_DAEMON_ACCEPTS=()
+    _ZSUGGESTION_DAEMON_DISPLAYS=()
+    _ZSUGGESTION_DAEMON_DESCRIPTIONS=()
+    _ZSUGGESTION_DAEMON_KINDS=()
+    _ZSUGGESTION_DAEMON_SOURCES=()
+    _ZSUGGESTION_NATIVE_ACCEPTS=()
+    _ZSUGGESTION_NATIVE_DISPLAYS=()
+    _ZSUGGESTION_NATIVE_DESCRIPTIONS=()
+    if (( _ZSUGGESTION_MENU_OWNS_DISPLAY )); then
       POSTDISPLAY=""
-      region_highlight=( "${(@)region_highlight:#*memo=aster*}" )
-      _ASTER_MENU_OWNS_DISPLAY=0
+      region_highlight=( "${(@)region_highlight:#*memo=zsuggestion*}" )
+      _ZSUGGESTION_MENU_OWNS_DISPLAY=0
     fi
   }
 
-  _aster_fuzzy_start() {
+  _zsuggestion_fuzzy_start() {
     (( CURSOR == ${#BUFFER} )) || return 1
-    _ASTER_FUZZY_KEYTIMEOUT=$KEYTIMEOUT
-    _ASTER_FUZZY_PREVIOUS_KEYMAP="$KEYMAP"
+    _ZSUGGESTION_FUZZY_KEYTIMEOUT=$KEYTIMEOUT
+    _ZSUGGESTION_FUZZY_PREVIOUS_KEYMAP="$KEYMAP"
     KEYTIMEOUT=1
-    _ASTER_FUZZY_ACTIVE=1
-    zle -K aster-fuzzy
-    _ASTER_FUZZY_BASE="$BUFFER"
-    _ASTER_FUZZY_QUERY=""
-    _ASTER_MENU_BUFFER="$BUFFER"
-    _aster_menu_schedule
-    _aster_menu_render
+    _ZSUGGESTION_FUZZY_ACTIVE=1
+    zle -K zsuggestion-fuzzy
+    _ZSUGGESTION_FUZZY_BASE="$BUFFER"
+    _ZSUGGESTION_FUZZY_QUERY=""
+    _ZSUGGESTION_MENU_BUFFER="$BUFFER"
+    _zsuggestion_menu_schedule
+    _zsuggestion_menu_render
   }
 
-  _aster_fuzzy_refresh() {
-    BUFFER="${_ASTER_FUZZY_BASE}${_ASTER_FUZZY_QUERY}"
+  _zsuggestion_fuzzy_refresh() {
+    BUFFER="${_ZSUGGESTION_FUZZY_BASE}${_ZSUGGESTION_FUZZY_QUERY}"
     CURSOR=${#BUFFER}
-    _ASTER_MENU_BUFFER="$BUFFER"
-    _aster_menu_schedule
-    _aster_menu_render
+    _ZSUGGESTION_MENU_BUFFER="$BUFFER"
+    _zsuggestion_menu_schedule
+    _zsuggestion_menu_render
   }
 
-  _aster_menu_render() {
-    local index display description kind icon marker row top bottom fill ghost=""
+  _zsuggestion_menu_render() {
+    local index display description kind kind_label icon marker row top bottom fill ghost=""
     local horizontal="─" vertical="│" top_left="╭" top_right="╮"
     local bottom_left="╰" bottom_right="╯" separator="·" ellipsis="…"
     local selected_marker="▶ " history_icon="↺" command_icon="❯" native_icon="⇥"
     local fuzzy_ghost_prefix="  → "
     local file_icon="·" directory_icon="▸" option_icon="-" subcommand_icon="›" value_icon="="
-    if (( ! _ASTER_UTF8_UI )); then
+    if (( ! _ZSUGGESTION_UTF8_UI )); then
       horizontal="-"
       vertical="|"
       top_left="+"
@@ -1010,44 +1010,44 @@ if [[ -o interactive ]] && (( $+commands[aster] )); then
       value_icon="V"
       fuzzy_ghost_prefix="  -> "
     fi
-    local input="${BUFFER:-$_ASTER_MENU_REQUEST_BUFFER}"
+    local input="${BUFFER:-$_ZSUGGESTION_MENU_REQUEST_BUFFER}"
     local cursor_position=$CURSOR
-    if [[ -z "$BUFFER" && -n "$_ASTER_MENU_REQUEST_BUFFER" ]]; then
-      cursor_position=$_ASTER_MENU_REQUEST_CURSOR
+    if [[ -z "$BUFFER" && -n "$_ZSUGGESTION_MENU_REQUEST_BUFFER" ]]; then
+      cursor_position=$_ZSUGGESTION_MENU_REQUEST_CURSOR
     fi
-    local total=${#_ASTER_MENU_DISPLAYS}
-    local selected="$_ASTER_MENU_DISPLAYS[$_ASTER_MENU_INDEX]"
+    local total=${#_ZSUGGESTION_MENU_DISPLAYS}
+    local selected="$_ZSUGGESTION_MENU_DISPLAYS[$_ZSUGGESTION_MENU_INDEX]"
     if (( cursor_position == ${#input} )); then
-      if (( _ASTER_FUZZY_ACTIVE )); then
+      if (( _ZSUGGESTION_FUZZY_ACTIVE )); then
         [[ -n "$selected" ]] && ghost="${fuzzy_ghost_prefix}${selected}"
       elif [[ -n "$input" && "$selected" == "$input"* ]]; then
         ghost="${selected[${#input}+1,-1]}"
       fi
     fi
-    region_highlight=( "${(@)region_highlight:#*memo=aster*}" )
+    region_highlight=( "${(@)region_highlight:#*memo=zsuggestion*}" )
     POSTDISPLAY="$ghost"
     local buffer_end=${#input}
-    if (( _ASTER_FUZZY_ACTIVE && ${#_ASTER_FUZZY_QUERY} )); then
-      local query_start=${#_ASTER_FUZZY_BASE}
-      region_highlight+=("$query_start $buffer_end fg=__ASTER_UI_ACCENT__,bold memo=aster")
+    if (( _ZSUGGESTION_FUZZY_ACTIVE && ${#_ZSUGGESTION_FUZZY_QUERY} )); then
+      local query_start=${#_ZSUGGESTION_FUZZY_BASE}
+      region_highlight+=("$query_start $buffer_end fg=__ZSUGGESTION_UI_ACCENT__,bold memo=zsuggestion")
     fi
     if [[ -n "$ghost" ]]; then
-      region_highlight+=("$buffer_end $(( buffer_end + ${#ghost} )) fg=__ASTER_UI_GHOST__ memo=aster")
+      region_highlight+=("$buffer_end $(( buffer_end + ${#ghost} )) fg=__ZSUGGESTION_UI_GHOST__ memo=zsuggestion")
     fi
     local box_width=$(( ${COLUMNS:-80} - 2 ))
-    (( box_width > __ASTER_UI_MENU_WIDTH__ )) && box_width=__ASTER_UI_MENU_WIDTH__
+    (( box_width > __ZSUGGESTION_UI_MENU_WIDTH__ )) && box_width=__ZSUGGESTION_UI_MENU_WIDTH__
     if (( box_width < 40 )); then
-      _aster_preview_clear
+      _zsuggestion_preview_clear
       local compact_width=$(( ${COLUMNS:-80} - 1 ))
       if (( total > 0 && compact_width >= 8 )); then
-        local compact_indent=$(( __ASTER_UI_PROMPT_OFFSET__ + cursor_position ))
+        local compact_indent=$(( __ZSUGGESTION_UI_PROMPT_OFFSET__ + cursor_position ))
         local compact_max_indent=$(( ${COLUMNS:-80} - compact_width - 1 ))
         (( compact_indent > compact_max_indent )) && compact_indent=$compact_max_indent
         (( compact_indent < 0 )) && compact_indent=0
         local compact_padding compact_display="$selected" compact_completion=""
         printf -v compact_padding '%*s' "$compact_indent" ""
         if (( ${#compact_display} > compact_width - 4 )); then
-          if (( ! _ASTER_FUZZY_ACTIVE )) && [[ "$compact_display" == "$input"* ]]; then
+          if (( ! _ZSUGGESTION_FUZZY_ACTIVE )) && [[ "$compact_display" == "$input"* ]]; then
             compact_completion="${compact_display[${#input}+1,-1]}"
           fi
           if [[ -n "$compact_completion" ]] &&
@@ -1059,7 +1059,7 @@ if [[ -o interactive ]] && (( $+commands[aster] )); then
             compact_display="${ellipsis}${compact_display[$compact_tail_start,-1]}"
           fi
         fi
-        kind="$_ASTER_MENU_KINDS[$_ASTER_MENU_INDEX]"
+        kind="$_ZSUGGESTION_MENU_KINDS[$_ZSUGGESTION_MENU_INDEX]"
         case "$kind" in
           history) icon="$history_icon" ;;
           command) icon="$command_icon" ;;
@@ -1074,75 +1074,76 @@ if [[ -o interactive ]] && (( $+commands[aster] )); then
         row="${selected_marker}${icon} ${compact_display}"
         local compact_start=$(( ${#input} + ${#POSTDISPLAY} + 1 + compact_indent ))
         POSTDISPLAY+=$'\n'"${compact_padding}${row}"
-        region_highlight+=("$compact_start $(( compact_start + ${#row} )) bg=__ASTER_UI_SELECTED_BACKGROUND__,fg=__ASTER_UI_SELECTED_TEXT__ memo=aster")
-        region_highlight+=("$compact_start $(( compact_start + 1 )) bg=__ASTER_UI_SELECTED_BACKGROUND__,fg=__ASTER_UI_ACCENT__,bold memo=aster")
+        region_highlight+=("$compact_start $(( compact_start + ${#row} )) bg=__ZSUGGESTION_UI_SELECTED_BACKGROUND__,fg=__ZSUGGESTION_UI_SELECTED_TEXT__ memo=zsuggestion")
+        region_highlight+=("$compact_start $(( compact_start + 1 )) bg=__ZSUGGESTION_UI_SELECTED_BACKGROUND__,fg=__ZSUGGESTION_UI_ACCENT__,bold memo=zsuggestion")
       fi
-      _ASTER_MENU_OWNS_DISPLAY=1
+      _ZSUGGESTION_MENU_OWNS_DISPLAY=1
       return 0
     fi
 
     if (( total == 0 )); then
-      region_highlight=( "${(@)region_highlight:#*memo=aster*}" )
+      region_highlight=( "${(@)region_highlight:#*memo=zsuggestion*}" )
       POSTDISPLAY=""
-      if (( _ASTER_FUZZY_ACTIVE && ${#_ASTER_FUZZY_QUERY} )); then
-        local query_start=${#_ASTER_FUZZY_BASE}
-        region_highlight+=("$query_start ${#input} fg=__ASTER_UI_ACCENT__,bold memo=aster")
+      if (( _ZSUGGESTION_FUZZY_ACTIVE && ${#_ZSUGGESTION_FUZZY_QUERY} )); then
+        local query_start=${#_ZSUGGESTION_FUZZY_BASE}
+        region_highlight+=("$query_start ${#input} fg=__ZSUGGESTION_UI_ACCENT__,bold memo=zsuggestion")
       fi
-      _ASTER_MENU_OWNS_DISPLAY=1
+      _ZSUGGESTION_MENU_OWNS_DISPLAY=1
       return 0
     fi
     local window_size=$total
-    (( window_size > __ASTER_UI_MAX_VISIBLE__ )) && window_size=__ASTER_UI_MAX_VISIBLE__
+    (( window_size > __ZSUGGESTION_UI_MAX_VISIBLE__ )) && window_size=__ZSUGGESTION_UI_MAX_VISIBLE__
     local max_start=$(( total - window_size + 1 ))
     if (( window_size > 2 )); then
-      (( _ASTER_MENU_INDEX <= _ASTER_MENU_START && _ASTER_MENU_START > 1 )) && \
-        _ASTER_MENU_START=$(( _ASTER_MENU_INDEX - 1 ))
-      (( _ASTER_MENU_INDEX >= _ASTER_MENU_START + window_size - 1 )) && \
-        _ASTER_MENU_START=$(( _ASTER_MENU_INDEX - window_size + 2 ))
+      (( _ZSUGGESTION_MENU_INDEX <= _ZSUGGESTION_MENU_START && _ZSUGGESTION_MENU_START > 1 )) && \
+        _ZSUGGESTION_MENU_START=$(( _ZSUGGESTION_MENU_INDEX - 1 ))
+      (( _ZSUGGESTION_MENU_INDEX >= _ZSUGGESTION_MENU_START + window_size - 1 )) && \
+        _ZSUGGESTION_MENU_START=$(( _ZSUGGESTION_MENU_INDEX - window_size + 2 ))
     else
-      (( _ASTER_MENU_INDEX < _ASTER_MENU_START )) && _ASTER_MENU_START=$_ASTER_MENU_INDEX
-      (( _ASTER_MENU_INDEX >= _ASTER_MENU_START + window_size )) && \
-        _ASTER_MENU_START=$(( _ASTER_MENU_INDEX - window_size + 1 ))
+      (( _ZSUGGESTION_MENU_INDEX < _ZSUGGESTION_MENU_START )) && _ZSUGGESTION_MENU_START=$_ZSUGGESTION_MENU_INDEX
+      (( _ZSUGGESTION_MENU_INDEX >= _ZSUGGESTION_MENU_START + window_size )) && \
+        _ZSUGGESTION_MENU_START=$(( _ZSUGGESTION_MENU_INDEX - window_size + 1 ))
     fi
-    (( _ASTER_MENU_START < 1 )) && _ASTER_MENU_START=1
-    (( _ASTER_MENU_START > max_start )) && _ASTER_MENU_START=$max_start
-    local end=$(( _ASTER_MENU_START + window_size - 1 ))
+    (( _ZSUGGESTION_MENU_START < 1 )) && _ZSUGGESTION_MENU_START=1
+    (( _ZSUGGESTION_MENU_START > max_start )) && _ZSUGGESTION_MENU_START=$max_start
+    local end=$(( _ZSUGGESTION_MENU_START + window_size - 1 ))
 
     local description_width=24
     (( box_width < 64 )) && description_width=16
-    local title_width=$(( box_width - description_width - 9 ))
+    local kind_width=6
+    local title_width=$(( box_width - description_width - 9 - kind_width - 1 ))
     local top_prefix="${top_left}${horizontal}"
-    local count=" $_ASTER_MENU_INDEX/$total "
+    local count=" $_ZSUGGESTION_MENU_INDEX/$total "
     printf -v fill '%*s' "$(( box_width - ${#top_prefix} - ${#count} - 1 ))" ""
     fill="${fill// /$horizontal}"
     top="${top_prefix}${fill}${count}${top_right}"
-    local footer=" S-Tab/K up ${separator} C-N down ${separator} Tab part ${separator} __ASTER_COMPLETION_KEY_LABEL__ full "
-    (( _ASTER_FUZZY_ACTIVE )) && \
+    local footer=" S-Tab/K up ${separator} C-N down ${separator} Tab part ${separator} __ZSUGGESTION_COMPLETION_KEY_LABEL__ full "
+    (( _ZSUGGESTION_FUZZY_ACTIVE )) && \
       footer=" Esc exit ${separator} C-K up ${separator} C-N down ${separator} Tab choose ${separator} Enter run "
     local bottom_prefix="${bottom_left}${horizontal}${footer}"
     printf -v fill '%*s' "$(( box_width - ${#bottom_prefix} - 1 ))" ""
     fill="${fill// /$horizontal}"
     bottom="${bottom_prefix}${fill}${bottom_right}"
 
-    local indent=$(( __ASTER_UI_PROMPT_OFFSET__ + cursor_position ))
+    local indent=$(( __ZSUGGESTION_UI_PROMPT_OFFSET__ + cursor_position ))
     local max_indent=$(( ${COLUMNS:-80} - box_width - 1 ))
     (( indent > max_indent )) && indent=$max_indent
     (( indent < 0 )) && indent=0
     local padding
     printf -v padding '%*s' "$indent" ""
 
-    _aster_preview_consider
+    _zsuggestion_preview_consider
 
     local line_start=$(( ${#input} + ${#POSTDISPLAY} + 1 + indent ))
     POSTDISPLAY+=$'\n'"${padding}${top}"
-    region_highlight+=("$line_start $(( line_start + ${#top} )) fg=__ASTER_UI_BORDER__ memo=aster")
+    region_highlight+=("$line_start $(( line_start + ${#top} )) fg=__ZSUGGESTION_UI_BORDER__ memo=zsuggestion")
 
-    for (( index = _ASTER_MENU_START; index <= end; index++ )); do
-      display="$_ASTER_MENU_DISPLAYS[$index]"
+    for (( index = _ZSUGGESTION_MENU_START; index <= end; index++ )); do
+      display="$_ZSUGGESTION_MENU_DISPLAYS[$index]"
       local display_truncated=0 completion_tail=""
       if (( ${#display} > title_width )); then
         display_truncated=1
-        if (( ! _ASTER_FUZZY_ACTIVE )) && [[ "$display" == "$input"* ]]; then
+        if (( ! _ZSUGGESTION_FUZZY_ACTIVE )) && [[ "$display" == "$input"* ]]; then
           completion_tail="${display[${#input}+1,-1]}"
         fi
         if [[ -n "$completion_tail" ]] && (( ${#completion_tail} <= title_width - 2 )); then
@@ -1153,11 +1154,11 @@ if [[ -o interactive ]] && (( $+commands[aster] )); then
           display="${ellipsis}${display[$tail_start,-1]}"
         fi
       fi
-      description="$_ASTER_MENU_DESCRIPTIONS[$index]"
+      description="$_ZSUGGESTION_MENU_DESCRIPTIONS[$index]"
       if (( ${#description} > description_width )); then
         description="${description[1,$(( description_width - 1 ))]}${ellipsis}"
       fi
-      kind="$_ASTER_MENU_KINDS[$index]"
+      kind="$_ZSUGGESTION_MENU_KINDS[$index]"
       case "$kind" in
         history) icon="$history_icon" ;;
         command) icon="$command_icon" ;;
@@ -1169,52 +1170,69 @@ if [[ -o interactive ]] && (( $+commands[aster] )); then
         value) icon="$value_icon" ;;
         *) icon="." ;;
       esac
+      case "$kind" in
+        history) kind_label="Hist" ;;
+        command) kind_label="Cmd" ;;
+        native) kind_label="Native" ;;
+        file) kind_label="File" ;;
+        directory) kind_label="Dir" ;;
+        option) kind_label="Opt" ;;
+        subcommand) kind_label="Sub" ;;
+        value) kind_label="Value" ;;
+        *) kind_label="" ;;
+      esac
       marker="  "
-      (( index == _ASTER_MENU_INDEX )) && marker="$selected_marker"
-      printf -v row '%s %s%s %-*s %-*s %s' \
+      (( index == _ZSUGGESTION_MENU_INDEX )) && marker="$selected_marker"
+      printf -v row '%s %s%s %-*s %-*s %*s %s' \
         "$vertical" "$marker" "$icon" "$title_width" "$display" \
-        "$description_width" "$description" "$vertical"
+        "$description_width" "$description" "$kind_width" "$kind_label" "$vertical"
 
       line_start=$(( ${#input} + ${#POSTDISPLAY} + 1 + indent ))
       POSTDISPLAY+=$'\n'"${padding}${row}"
-      if (( index == _ASTER_MENU_INDEX )); then
-        region_highlight+=("$(( line_start + 1 )) $(( line_start + ${#row} - 1 )) bg=__ASTER_UI_SELECTED_BACKGROUND__,fg=__ASTER_UI_SELECTED_TEXT__ memo=aster")
-        region_highlight+=("$(( line_start + 2 )) $(( line_start + 3 )) bg=__ASTER_UI_SELECTED_BACKGROUND__,fg=__ASTER_UI_ACCENT__,bold memo=aster")
-        region_highlight+=("$(( line_start + 4 )) $(( line_start + 5 )) bg=__ASTER_UI_SELECTED_BACKGROUND__,fg=__ASTER_UI_ACCENT__ memo=aster")
+      if (( index == _ZSUGGESTION_MENU_INDEX )); then
+        region_highlight+=("$(( line_start + 1 )) $(( line_start + ${#row} - 1 )) bg=__ZSUGGESTION_UI_SELECTED_BACKGROUND__,fg=__ZSUGGESTION_UI_SELECTED_TEXT__ memo=zsuggestion")
+        region_highlight+=("$(( line_start + 2 )) $(( line_start + 3 )) bg=__ZSUGGESTION_UI_SELECTED_BACKGROUND__,fg=__ZSUGGESTION_UI_ACCENT__,bold memo=zsuggestion")
+        region_highlight+=("$(( line_start + 4 )) $(( line_start + 5 )) bg=__ZSUGGESTION_UI_SELECTED_BACKGROUND__,fg=__ZSUGGESTION_UI_ACCENT__ memo=zsuggestion")
       else
-        region_highlight+=("$(( line_start + 1 )) $(( line_start + ${#row} - 1 )) fg=__ASTER_UI_TEXT__ memo=aster")
-        region_highlight+=("$(( line_start + 4 )) $(( line_start + 5 )) fg=__ASTER_UI_MUTED__ memo=aster")
+        region_highlight+=("$(( line_start + 1 )) $(( line_start + ${#row} - 1 )) fg=__ZSUGGESTION_UI_TEXT__ memo=zsuggestion")
+        region_highlight+=("$(( line_start + 4 )) $(( line_start + 5 )) fg=__ZSUGGESTION_UI_MUTED__ memo=zsuggestion")
       fi
-      region_highlight+=("$line_start $(( line_start + 1 )) fg=__ASTER_UI_BORDER__ memo=aster")
-      region_highlight+=("$(( line_start + ${#row} - 1 )) $(( line_start + ${#row} )) fg=__ASTER_UI_BORDER__ memo=aster")
+      region_highlight+=("$line_start $(( line_start + 1 )) fg=__ZSUGGESTION_UI_BORDER__ memo=zsuggestion")
+      region_highlight+=("$(( line_start + ${#row} - 1 )) $(( line_start + ${#row} )) fg=__ZSUGGESTION_UI_BORDER__ memo=zsuggestion")
 
       local match_length=0
-      (( ! _ASTER_FUZZY_ACTIVE && ! display_truncated )) && match_length=${#input}
+      (( ! _ZSUGGESTION_FUZZY_ACTIVE && ! display_truncated )) && match_length=${#input}
       (( match_length > title_width )) && match_length=$title_width
       if (( match_length > 0 )); then
-        if (( index == _ASTER_MENU_INDEX )); then
-          region_highlight+=("$(( line_start + 6 )) $(( line_start + 6 + match_length )) bg=__ASTER_UI_SELECTED_BACKGROUND__,fg=__ASTER_UI_SELECTED_TEXT__,bold memo=aster")
+        if (( index == _ZSUGGESTION_MENU_INDEX )); then
+          region_highlight+=("$(( line_start + 6 )) $(( line_start + 6 + match_length )) bg=__ZSUGGESTION_UI_SELECTED_BACKGROUND__,fg=__ZSUGGESTION_UI_SELECTED_TEXT__,bold memo=zsuggestion")
         else
-          region_highlight+=("$(( line_start + 6 )) $(( line_start + 6 + match_length )) fg=__ASTER_UI_SELECTED_TEXT__,bold memo=aster")
+          region_highlight+=("$(( line_start + 6 )) $(( line_start + 6 + match_length )) fg=__ZSUGGESTION_UI_SELECTED_TEXT__,bold memo=zsuggestion")
         fi
       fi
       local description_start=$(( line_start + 6 + title_width + 1 ))
-      if (( index == _ASTER_MENU_INDEX )); then
-        region_highlight+=("$description_start $(( description_start + description_width )) bg=__ASTER_UI_SELECTED_BACKGROUND__,fg=__ASTER_UI_SELECTED_SOURCE__ memo=aster")
+      if (( index == _ZSUGGESTION_MENU_INDEX )); then
+        region_highlight+=("$description_start $(( description_start + description_width )) bg=__ZSUGGESTION_UI_SELECTED_BACKGROUND__,fg=__ZSUGGESTION_UI_SELECTED_SOURCE__ memo=zsuggestion")
       else
-        region_highlight+=("$description_start $(( description_start + description_width )) fg=__ASTER_UI_MUTED__ memo=aster")
+        region_highlight+=("$description_start $(( description_start + description_width )) fg=__ZSUGGESTION_UI_MUTED__ memo=zsuggestion")
+      fi
+      local kind_start=$(( description_start + description_width + 1 ))
+      if (( index == _ZSUGGESTION_MENU_INDEX )); then
+        region_highlight+=("$kind_start $(( kind_start + kind_width )) bg=__ZSUGGESTION_UI_SELECTED_BACKGROUND__,fg=__ZSUGGESTION_UI_ACCENT__,bold memo=zsuggestion")
+      else
+        region_highlight+=("$kind_start $(( kind_start + kind_width )) fg=__ZSUGGESTION_UI_MUTED__ memo=zsuggestion")
       fi
     done
 
     line_start=$(( ${#input} + ${#POSTDISPLAY} + 1 + indent ))
     POSTDISPLAY+=$'\n'"${padding}${bottom}"
-    region_highlight+=("$line_start $(( line_start + ${#bottom} )) fg=__ASTER_UI_BORDER__ memo=aster")
-    local preview_source="${_ASTER_MENU_SOURCES[$_ASTER_MENU_INDEX]}"
-    local preview_description="${_ASTER_MENU_DESCRIPTIONS[$_ASTER_MENU_INDEX]}"
+    region_highlight+=("$line_start $(( line_start + ${#bottom} )) fg=__ZSUGGESTION_UI_BORDER__ memo=zsuggestion")
+    local preview_source="${_ZSUGGESTION_MENU_SOURCES[$_ZSUGGESTION_MENU_INDEX]}"
+    local preview_description="${_ZSUGGESTION_MENU_DESCRIPTIONS[$_ZSUGGESTION_MENU_INDEX]}"
     local show_preview=0
-    if [[ ${#_ASTER_PREVIEW_LINES} -gt 0 &&
-          "${_ASTER_PREVIEW_LINES[1]}" != "Preview unavailable" &&
-          "${_ASTER_PREVIEW_LINES[1]}" != "Preview timed out" ]]; then
+    if [[ ${#_ZSUGGESTION_PREVIEW_LINES} -gt 0 &&
+          "${_ZSUGGESTION_PREVIEW_LINES[1]}" != "Preview unavailable" &&
+          "${_ZSUGGESTION_PREVIEW_LINES[1]}" != "Preview timed out" ]]; then
       show_preview=1
     elif [[ "$preview_source" == command && -n "$preview_description" &&
           "$preview_description" != "System command" &&
@@ -1229,10 +1247,10 @@ if [[ -o interactive ]] && (( $+commands[aster] )); then
         local preview_style style_span style_start style_end style_value style_rest
         local preview_content_width=$(( preview_width - 4 ))
         local -a preview_lines
-        if (( ${#_ASTER_PREVIEW_LINES} )); then
-          preview_lines=("${_ASTER_PREVIEW_LINES[@]}")
+        if (( ${#_ZSUGGESTION_PREVIEW_LINES} )); then
+          preview_lines=("${_ZSUGGESTION_PREVIEW_LINES[@]}")
         else
-          preview_lines=("Source: ${_ASTER_MENU_SOURCES[$_ASTER_MENU_INDEX]} / ${_ASTER_MENU_KINDS[$_ASTER_MENU_INDEX]}")
+          preview_lines=("Source: ${_ZSUGGESTION_MENU_SOURCES[$_ZSUGGESTION_MENU_INDEX]} / ${_ZSUGGESTION_MENU_KINDS[$_ZSUGGESTION_MENU_INDEX]}")
           preview_lines+=("$preview_description")
         fi
         (( ${#preview_label} > preview_width - 2 )) && \
@@ -1242,7 +1260,7 @@ if [[ -o interactive ]] && (( $+commands[aster] )); then
         preview_top="${top_left}${preview_label}${fill}${top_right}"
         line_start=$(( ${#input} + ${#POSTDISPLAY} + 1 + indent ))
         POSTDISPLAY+=$'\n'"${padding}${preview_top}"
-        region_highlight+=("$line_start $(( line_start + ${#preview_top} )) fg=__ASTER_UI_BORDER__ memo=aster")
+        region_highlight+=("$line_start $(( line_start + ${#preview_top} )) fg=__ZSUGGESTION_UI_BORDER__ memo=zsuggestion")
         local preview_index
         for (( preview_index = 1; preview_index <= ${#preview_lines} && preview_index <= 8; preview_index++ )); do
           preview_line="${preview_lines[$preview_index]}"
@@ -1251,10 +1269,10 @@ if [[ -o interactive ]] && (( $+commands[aster] )); then
           printf -v row '%s %-*s %s' "$vertical" "$preview_content_width" "$preview_line" "$vertical"
           line_start=$(( ${#input} + ${#POSTDISPLAY} + 1 + indent ))
           POSTDISPLAY+=$'\n'"${padding}${row}"
-          region_highlight+=("$line_start $(( line_start + 1 )) fg=__ASTER_UI_BORDER__ memo=aster")
-          region_highlight+=("$(( line_start + 1 )) $(( line_start + ${#row} - 1 )) fg=__ASTER_UI_TEXT__ memo=aster")
-          region_highlight+=("$(( line_start + ${#row} - 1 )) $(( line_start + ${#row} )) fg=__ASTER_UI_BORDER__ memo=aster")
-          preview_style="${_ASTER_PREVIEW_STYLES[$preview_index]}"
+          region_highlight+=("$line_start $(( line_start + 1 )) fg=__ZSUGGESTION_UI_BORDER__ memo=zsuggestion")
+          region_highlight+=("$(( line_start + 1 )) $(( line_start + ${#row} - 1 )) fg=__ZSUGGESTION_UI_TEXT__ memo=zsuggestion")
+          region_highlight+=("$(( line_start + ${#row} - 1 )) $(( line_start + ${#row} )) fg=__ZSUGGESTION_UI_BORDER__ memo=zsuggestion")
+          preview_style="${_ZSUGGESTION_PREVIEW_STYLES[$preview_index]}"
           for style_span in ${(s:;:)preview_style}; do
             style_start="${style_span%%:*}"
             style_rest="${style_span#*:}"
@@ -1264,7 +1282,7 @@ if [[ -o interactive ]] && (( $+commands[aster] )); then
             (( style_start >= ${#preview_line} )) && continue
             (( style_end > ${#preview_line} )) && style_end=${#preview_line}
             (( style_start < style_end )) && \
-              region_highlight+=("$(( line_start + 2 + style_start )) $(( line_start + 2 + style_end )) ${style_value} memo=aster")
+              region_highlight+=("$(( line_start + 2 + style_start )) $(( line_start + 2 + style_end )) ${style_value} memo=zsuggestion")
           done
         done
         printf -v fill '%*s' "$(( preview_width - 2 ))" ""
@@ -1272,49 +1290,49 @@ if [[ -o interactive ]] && (( $+commands[aster] )); then
         preview_bottom="${bottom_left}${fill}${bottom_right}"
         line_start=$(( ${#input} + ${#POSTDISPLAY} + 1 + indent ))
         POSTDISPLAY+=$'\n'"${padding}${preview_bottom}"
-        region_highlight+=("$line_start $(( line_start + ${#preview_bottom} )) fg=__ASTER_UI_BORDER__ memo=aster")
+        region_highlight+=("$line_start $(( line_start + ${#preview_bottom} )) fg=__ZSUGGESTION_UI_BORDER__ memo=zsuggestion")
       fi
     fi
-    _ASTER_MENU_OWNS_DISPLAY=1
+    _ZSUGGESTION_MENU_OWNS_DISPLAY=1
   }
 
-  _aster_menu_query() {
+  _zsuggestion_menu_query() {
     local LC_ALL=C cursor_byte accept display description kind source
-    _aster_menu_cancel_request
+    _zsuggestion_menu_cancel_request
     cursor_byte=${#LBUFFER}
-    _ASTER_MENU_BUFFER="$BUFFER"
-    _ASTER_MENU_ACCEPTS=()
-    _ASTER_MENU_DISPLAYS=()
-    _ASTER_MENU_DESCRIPTIONS=()
-    _ASTER_MENU_KINDS=()
-    _ASTER_MENU_SOURCES=()
+    _ZSUGGESTION_MENU_BUFFER="$BUFFER"
+    _ZSUGGESTION_MENU_ACCEPTS=()
+    _ZSUGGESTION_MENU_DISPLAYS=()
+    _ZSUGGESTION_MENU_DESCRIPTIONS=()
+    _ZSUGGESTION_MENU_KINDS=()
+    _ZSUGGESTION_MENU_SOURCES=()
     while IFS= read -r -d '' accept &&
           IFS= read -r -d '' display &&
           IFS= read -r -d '' description &&
           IFS= read -r -d '' kind &&
           IFS= read -r -d '' source; do
-      _ASTER_MENU_ACCEPTS+=("$accept")
-      _ASTER_MENU_DISPLAYS+=("$display")
-      _ASTER_MENU_DESCRIPTIONS+=("$description")
-      _ASTER_MENU_KINDS+=("$kind")
-      _ASTER_MENU_SOURCES+=("$source")
-    done < <(print -rn -- "$BUFFER" | command aster complete \
+      _ZSUGGESTION_MENU_ACCEPTS+=("$accept")
+      _ZSUGGESTION_MENU_DISPLAYS+=("$display")
+      _ZSUGGESTION_MENU_DESCRIPTIONS+=("$description")
+      _ZSUGGESTION_MENU_KINDS+=("$kind")
+      _ZSUGGESTION_MENU_SOURCES+=("$source")
+    done < <(print -rn -- "$BUFFER" | command zsuggestion complete \
       --stdin \
       --cursor "$cursor_byte" \
       --cwd "$PWD" \
       --format zsh 2>/dev/null)
-    if (( ${#_ASTER_MENU_ACCEPTS} == 0 )); then
-      _aster_menu_clear 1
+    if (( ${#_ZSUGGESTION_MENU_ACCEPTS} == 0 )); then
+      _zsuggestion_menu_clear 1
       return 1
     fi
-    _ASTER_MENU_ACTIVE=1
-    _ASTER_MENU_INDEX=1
-    _ASTER_MENU_START=1
-    _aster_menu_render
+    _ZSUGGESTION_MENU_ACTIVE=1
+    _ZSUGGESTION_MENU_INDEX=1
+    _ZSUGGESTION_MENU_START=1
+    _zsuggestion_menu_render
     return 0
   }
 
-  _aster_next_segment() {
+  _zsuggestion_next_segment() {
     local value="$1" character
     local index boundary next quote=""
     local saw_non_whitespace=0 escaped=0 bracket_depth=0
@@ -1383,24 +1401,24 @@ if [[ -o interactive ]] && (( $+commands[aster] )); then
     done
   }
 
-  _aster_menu_accept() {
+  _zsuggestion_menu_accept() {
     local mode="${1:-candidate}"
-    local accept="${_ASTER_MENU_ACCEPTS[$_ASTER_MENU_INDEX]}"
-    local display="${_ASTER_MENU_DISPLAYS[$_ASTER_MENU_INDEX]}"
-    local source="${_ASTER_MENU_SOURCES[$_ASTER_MENU_INDEX]}"
-    local kind="${_ASTER_MENU_KINDS[$_ASTER_MENU_INDEX]}"
+    local accept="${_ZSUGGESTION_MENU_ACCEPTS[$_ZSUGGESTION_MENU_INDEX]}"
+    local display="${_ZSUGGESTION_MENU_DISPLAYS[$_ZSUGGESTION_MENU_INDEX]}"
+    local source="${_ZSUGGESTION_MENU_SOURCES[$_ZSUGGESTION_MENU_INDEX]}"
+    local kind="${_ZSUGGESTION_MENU_KINDS[$_ZSUGGESTION_MENU_INDEX]}"
     (( CURSOR == ${#BUFFER} )) || return 1
-    if (( _ASTER_FUZZY_ACTIVE )); then
-      _aster_menu_clear
+    if (( _ZSUGGESTION_FUZZY_ACTIVE )); then
+      _zsuggestion_menu_clear
       BUFFER="$accept"
       [[ "$source" == command && "$BUFFER" != *[[:space:]]* ]] && BUFFER+=" "
       CURSOR=${#BUFFER}
-      _ASTER_MENU_BUFFER="$BUFFER"
-      _aster_menu_schedule
+      _ZSUGGESTION_MENU_BUFFER="$BUFFER"
+      _zsuggestion_menu_schedule
       return 0
     fi
     if [[ "$mode" == segment ]]; then
-      _aster_next_segment "$accept"
+      _zsuggestion_next_segment "$accept"
       accept="$REPLY"
     fi
     LBUFFER+="$accept"
@@ -1412,24 +1430,24 @@ if [[ -o interactive ]] && (( $+commands[aster] )); then
     fi
     POSTDISPLAY=""
     if [[ "$mode" == segment ]]; then
-      _ASTER_MENU_INDEX=1
-      _ASTER_MENU_START=1
-      _ASTER_MENU_RESTORE_INDEX=1
-      _aster_menu_refresh
+      _ZSUGGESTION_MENU_INDEX=1
+      _ZSUGGESTION_MENU_START=1
+      _ZSUGGESTION_MENU_RESTORE_INDEX=1
+      _zsuggestion_menu_refresh
     else
-      _aster_menu_clear
-      _ASTER_MENU_BUFFER="$BUFFER"
-      _aster_menu_schedule
+      _zsuggestion_menu_clear
+      _ZSUGGESTION_MENU_BUFFER="$BUFFER"
+      _zsuggestion_menu_schedule
     fi
   }
 
-  _aster_path_accept() {
+  _zsuggestion_path_accept() {
     local index found=0 common="" candidate
-    for (( index = 1; index <= ${#_ASTER_MENU_ACCEPTS}; index++ )); do
-      [[ "${_ASTER_MENU_KINDS[$index]}" == file ||
-         "${_ASTER_MENU_KINDS[$index]}" == directory ]] || continue
+    for (( index = 1; index <= ${#_ZSUGGESTION_MENU_ACCEPTS}; index++ )); do
+      [[ "${_ZSUGGESTION_MENU_KINDS[$index]}" == file ||
+         "${_ZSUGGESTION_MENU_KINDS[$index]}" == directory ]] || continue
       (( found++ ))
-      candidate="${_ASTER_MENU_ACCEPTS[$index]}"
+      candidate="${_ZSUGGESTION_MENU_ACCEPTS[$index]}"
       if [[ -z "$common" ]]; then
         common="$candidate"
       else
@@ -1438,226 +1456,181 @@ if [[ -o interactive ]] && (( $+commands[aster] )); then
         done
       fi
     done
-    if [[ "${_ASTER_MENU_KINDS[$_ASTER_MENU_INDEX]}" == file &&
-          "${_ASTER_MENU_DISPLAYS[$_ASTER_MENU_INDEX]}" == "$BUFFER" ]]; then
-      _aster_menu_accept segment
+    if [[ "${_ZSUGGESTION_MENU_KINDS[$_ZSUGGESTION_MENU_INDEX]}" == file &&
+          "${_ZSUGGESTION_MENU_DISPLAYS[$_ZSUGGESTION_MENU_INDEX]}" == "$BUFFER" ]]; then
+      _zsuggestion_menu_accept segment
       return
     fi
-    if (( found == 1 )) && [[ "${_ASTER_MENU_DESCRIPTIONS[$_ASTER_MENU_INDEX]}" != *"(more matches)" ]]; then
-      _aster_menu_accept segment
+    if (( found == 1 )) && [[ "${_ZSUGGESTION_MENU_DESCRIPTIONS[$_ZSUGGESTION_MENU_INDEX]}" != *"(more matches)" ]]; then
+      _zsuggestion_menu_accept segment
       return
     fi
-    if [[ -n "$common" && "${(j: :)_ASTER_MENU_DESCRIPTIONS}" != *"(more matches)"* ]]; then
-      _aster_next_segment "$common"
+    if [[ -n "$common" && "${(j: :)_ZSUGGESTION_MENU_DESCRIPTIONS}" != *"(more matches)"* ]]; then
+      _zsuggestion_next_segment "$common"
       if [[ -n "$REPLY" ]]; then
         LBUFFER+="$REPLY"
         POSTDISPLAY=""
-        _ASTER_MENU_INDEX=1
-        _ASTER_MENU_START=1
-        _ASTER_MENU_RESTORE_INDEX=1
-        _aster_menu_refresh
+        _ZSUGGESTION_MENU_INDEX=1
+        _ZSUGGESTION_MENU_START=1
+        _ZSUGGESTION_MENU_RESTORE_INDEX=1
+        _zsuggestion_menu_refresh
         return
       fi
     fi
     zle beep
   }
 
-  _aster_call_native_completion() {
+  _zsuggestion_call_native_completion() {
     local widget="$1"
-    _ASTER_IN_NATIVE_COMPLETION=1
+    _ZSUGGESTION_IN_NATIVE_COMPLETION=1
     {
       zle "$widget"
     } always {
-      _ASTER_IN_NATIVE_COMPLETION=0
+      _ZSUGGESTION_IN_NATIVE_COMPLETION=0
     }
   }
 
-  _aster_menu_refresh() {
-    local previous_buffer="$_ASTER_MENU_BUFFER" delta="" accept
-    local index retained_index=$_ASTER_MENU_INDEX
+  _zsuggestion_menu_refresh() {
+    local previous_buffer="$_ZSUGGESTION_MENU_BUFFER" delta="" accept
+    local index retained_index=$_ZSUGGESTION_MENU_INDEX
     local -a accepts displays descriptions kinds sources
-    if (( _ASTER_MENU_ACTIVE )) && [[ "$BUFFER" == "$previous_buffer"* ]]; then
+    if (( _ZSUGGESTION_MENU_ACTIVE )) && [[ "$BUFFER" == "$previous_buffer"* ]]; then
       delta="${BUFFER[${#previous_buffer}+1,-1]}"
-      for (( index = 1; index <= ${#_ASTER_MENU_DISPLAYS}; index++ )); do
-        [[ "${_ASTER_MENU_DISPLAYS[$index]}" == "$BUFFER"* ]] || continue
-        accept="${_ASTER_MENU_ACCEPTS[$index]}"
+      for (( index = 1; index <= ${#_ZSUGGESTION_MENU_DISPLAYS}; index++ )); do
+        [[ "${_ZSUGGESTION_MENU_DISPLAYS[$index]}" == "$BUFFER"* ]] || continue
+        accept="${_ZSUGGESTION_MENU_ACCEPTS[$index]}"
         if [[ -n "$delta" ]]; then
           [[ "$accept" == "$delta"* ]] || continue
           accept="${accept[${#delta}+1,-1]}"
         fi
         if [[ -z "$accept" ]]; then
-          if [[ "${_ASTER_MENU_KINDS[$index]}" == file &&
-                "${_ASTER_MENU_DISPLAYS[$index]}" == "$BUFFER" ]]; then
+          if [[ "${_ZSUGGESTION_MENU_KINDS[$index]}" == file &&
+                "${_ZSUGGESTION_MENU_DISPLAYS[$index]}" == "$BUFFER" ]]; then
             accept=" "
           else
             continue
           fi
         fi
         accepts+=("$accept")
-        displays+=("${_ASTER_MENU_DISPLAYS[$index]}")
-        descriptions+=("${_ASTER_MENU_DESCRIPTIONS[$index]}")
-        kinds+=("${_ASTER_MENU_KINDS[$index]}")
-        sources+=("${_ASTER_MENU_SOURCES[$index]}")
+        displays+=("${_ZSUGGESTION_MENU_DISPLAYS[$index]}")
+        descriptions+=("${_ZSUGGESTION_MENU_DESCRIPTIONS[$index]}")
+        kinds+=("${_ZSUGGESTION_MENU_KINDS[$index]}")
+        sources+=("${_ZSUGGESTION_MENU_SOURCES[$index]}")
       done
     fi
     if (( ${#displays} )); then
-      _ASTER_MENU_ACCEPTS=("${accepts[@]}")
-      _ASTER_MENU_DISPLAYS=("${displays[@]}")
-      _ASTER_MENU_DESCRIPTIONS=("${descriptions[@]}")
-      _ASTER_MENU_KINDS=("${kinds[@]}")
-      _ASTER_MENU_SOURCES=("${sources[@]}")
-      (( retained_index > ${#_ASTER_MENU_DISPLAYS} )) && retained_index=${#_ASTER_MENU_DISPLAYS}
+      _ZSUGGESTION_MENU_ACCEPTS=("${accepts[@]}")
+      _ZSUGGESTION_MENU_DISPLAYS=("${displays[@]}")
+      _ZSUGGESTION_MENU_DESCRIPTIONS=("${descriptions[@]}")
+      _ZSUGGESTION_MENU_KINDS=("${kinds[@]}")
+      _ZSUGGESTION_MENU_SOURCES=("${sources[@]}")
+      (( retained_index > ${#_ZSUGGESTION_MENU_DISPLAYS} )) && retained_index=${#_ZSUGGESTION_MENU_DISPLAYS}
       (( retained_index < 1 )) && retained_index=1
-      _ASTER_MENU_INDEX=$retained_index
-      _ASTER_MENU_START=$retained_index
-      _ASTER_MENU_BUFFER="$BUFFER"
-      _ASTER_CAPTURE_FOREIGN_HIGHLIGHTS=1
-      _aster_menu_render
+      _ZSUGGESTION_MENU_INDEX=$retained_index
+      _ZSUGGESTION_MENU_START=$retained_index
+      _ZSUGGESTION_MENU_BUFFER="$BUFFER"
+      _ZSUGGESTION_CAPTURE_FOREIGN_HIGHLIGHTS=1
+      _zsuggestion_menu_render
     else
-      _aster_menu_clear
+      _zsuggestion_menu_clear
     fi
-    _ASTER_MENU_BUFFER="$BUFFER"
+    _ZSUGGESTION_MENU_BUFFER="$BUFFER"
     if [[ -n "$BUFFER" ]] && (( CURSOR == ${#BUFFER} )); then
-      _aster_menu_schedule
+      _zsuggestion_menu_schedule
     fi
   }
 
-  _aster_menu_schedule() {
+  _zsuggestion_menu_schedule() {
     local LC_ALL=C
-    _aster_menu_cancel_query
-    _aster_native_cancel
-    _ASTER_MENU_REQUEST_BUFFER="$BUFFER"
-    _ASTER_MENU_REQUEST_CWD="$PWD"
-    _ASTER_MENU_REQUEST_CURSOR=${#LBUFFER}
-    _ASTER_MENU_REQUEST_DIRTY=1
-    _ASTER_NATIVE_REQUESTED=0
-    _ASTER_NATIVE_START_TICKS=0
-    _ASTER_DAEMON_ACCEPTS=()
-    _ASTER_DAEMON_DISPLAYS=()
-    _ASTER_DAEMON_DESCRIPTIONS=()
-    _ASTER_DAEMON_KINDS=()
-    _ASTER_DAEMON_SOURCES=()
-    _ASTER_NATIVE_ACCEPTS=()
-    _ASTER_NATIVE_DISPLAYS=()
-    _ASTER_NATIVE_DESCRIPTIONS=()
+    _zsuggestion_menu_cancel_query
+    _zsuggestion_native_cancel
+    _ZSUGGESTION_MENU_REQUEST_BUFFER="$BUFFER"
+    _ZSUGGESTION_MENU_REQUEST_CWD="$PWD"
+    _ZSUGGESTION_MENU_REQUEST_CURSOR=${#LBUFFER}
+    _ZSUGGESTION_MENU_REQUEST_DIRTY=1
+    _ZSUGGESTION_NATIVE_REQUESTED=0
+    _ZSUGGESTION_NATIVE_START_TICKS=0
+    _ZSUGGESTION_DAEMON_ACCEPTS=()
+    _ZSUGGESTION_DAEMON_DISPLAYS=()
+    _ZSUGGESTION_DAEMON_DESCRIPTIONS=()
+    _ZSUGGESTION_DAEMON_KINDS=()
+    _ZSUGGESTION_DAEMON_SOURCES=()
+    _ZSUGGESTION_NATIVE_ACCEPTS=()
+    _ZSUGGESTION_NATIVE_DISPLAYS=()
+    _ZSUGGESTION_NATIVE_DESCRIPTIONS=()
   }
 
-  _aster_menu_publish() {
+  _zsuggestion_menu_publish() {
     local index display
     local -a redraw_hooks apply_hooks
-    local limit=$(( __ASTER_COMPLETION_MAX_CANDIDATES__ * 2 ))
-    _ASTER_MENU_ACCEPTS=()
-    _ASTER_MENU_DISPLAYS=()
-    _ASTER_MENU_DESCRIPTIONS=()
-    _ASTER_MENU_KINDS=()
-    _ASTER_MENU_SOURCES=()
+    local limit=$(( __ZSUGGESTION_COMPLETION_MAX_CANDIDATES__ * 2 ))
+    _ZSUGGESTION_MENU_ACCEPTS=()
+    _ZSUGGESTION_MENU_DISPLAYS=()
+    _ZSUGGESTION_MENU_DESCRIPTIONS=()
+    _ZSUGGESTION_MENU_KINDS=()
+    _ZSUGGESTION_MENU_SOURCES=()
 
-    for (( index = 1; index <= ${#_ASTER_DAEMON_ACCEPTS}; index++ )); do
-      [[ "${_ASTER_DAEMON_SOURCES[$index]}" == history ]] || continue
-      display="${_ASTER_DAEMON_DISPLAYS[$index]}"
-      [[ -n "$display" ]] && (( ! ${_ASTER_MENU_DISPLAYS[(Ie)$display]} )) || continue
-      _ASTER_MENU_ACCEPTS+=("${_ASTER_DAEMON_ACCEPTS[$index]}")
-      _ASTER_MENU_DISPLAYS+=("$display")
-      _ASTER_MENU_DESCRIPTIONS+=("${_ASTER_DAEMON_DESCRIPTIONS[$index]}")
-      _ASTER_MENU_KINDS+=("${_ASTER_DAEMON_KINDS[$index]}")
-      _ASTER_MENU_SOURCES+=("${_ASTER_DAEMON_SOURCES[$index]}")
-      (( ${#_ASTER_MENU_ACCEPTS} >= limit )) && break
+    for (( index = 1; index <= ${#_ZSUGGESTION_DAEMON_ACCEPTS}; index++ )); do
+      display="${_ZSUGGESTION_DAEMON_DISPLAYS[$index]}"
+      [[ -n "$display" ]] && (( ! ${_ZSUGGESTION_MENU_DISPLAYS[(Ie)$display]} )) || continue
+      _ZSUGGESTION_MENU_ACCEPTS+=("${_ZSUGGESTION_DAEMON_ACCEPTS[$index]}")
+      _ZSUGGESTION_MENU_DISPLAYS+=("$display")
+      _ZSUGGESTION_MENU_DESCRIPTIONS+=("${_ZSUGGESTION_DAEMON_DESCRIPTIONS[$index]}")
+      _ZSUGGESTION_MENU_KINDS+=("${_ZSUGGESTION_DAEMON_KINDS[$index]}")
+      _ZSUGGESTION_MENU_SOURCES+=("${_ZSUGGESTION_DAEMON_SOURCES[$index]}")
+      (( ${#_ZSUGGESTION_MENU_ACCEPTS} >= limit )) && break
     done
 
-    if (( ${#_ASTER_MENU_ACCEPTS} < limit )); then
-      for (( index = 1; index <= ${#_ASTER_DAEMON_ACCEPTS}; index++ )); do
-        [[ "${_ASTER_DAEMON_SOURCES[$index]}" == filesystem ]] || continue
-        display="${_ASTER_DAEMON_DISPLAYS[$index]}"
-        [[ -n "$display" ]] && (( ! ${_ASTER_MENU_DISPLAYS[(Ie)$display]} )) || continue
-        _ASTER_MENU_ACCEPTS+=("${_ASTER_DAEMON_ACCEPTS[$index]}")
-        _ASTER_MENU_DISPLAYS+=("$display")
-        _ASTER_MENU_DESCRIPTIONS+=("${_ASTER_DAEMON_DESCRIPTIONS[$index]}")
-        _ASTER_MENU_KINDS+=("${_ASTER_DAEMON_KINDS[$index]}")
-        _ASTER_MENU_SOURCES+=("${_ASTER_DAEMON_SOURCES[$index]}")
-        (( ${#_ASTER_MENU_ACCEPTS} >= limit )) && break
+    if (( ${#_ZSUGGESTION_MENU_ACCEPTS} < limit )); then
+      for (( index = 1; index <= ${#_ZSUGGESTION_NATIVE_ACCEPTS}; index++ )); do
+        display="${_ZSUGGESTION_NATIVE_DISPLAYS[$index]}"
+        [[ -n "$display" ]] && (( ! ${_ZSUGGESTION_MENU_DISPLAYS[(Ie)$display]} )) || continue
+        _ZSUGGESTION_MENU_ACCEPTS+=("${_ZSUGGESTION_NATIVE_ACCEPTS[$index]}")
+        _ZSUGGESTION_MENU_DISPLAYS+=("$display")
+        _ZSUGGESTION_MENU_DESCRIPTIONS+=("${_ZSUGGESTION_NATIVE_DESCRIPTIONS[$index]}")
+        _ZSUGGESTION_MENU_KINDS+=("native")
+        _ZSUGGESTION_MENU_SOURCES+=("native")
+        (( ${#_ZSUGGESTION_MENU_ACCEPTS} >= limit )) && break
       done
     fi
 
-    if (( ${#_ASTER_MENU_ACCEPTS} < limit )); then
-      for (( index = 1; index <= ${#_ASTER_DAEMON_ACCEPTS}; index++ )); do
-        [[ "${_ASTER_DAEMON_SOURCES[$index]}" == help ]] || continue
-        display="${_ASTER_DAEMON_DISPLAYS[$index]}"
-        [[ -n "$display" ]] && (( ! ${_ASTER_MENU_DISPLAYS[(Ie)$display]} )) || continue
-        _ASTER_MENU_ACCEPTS+=("${_ASTER_DAEMON_ACCEPTS[$index]}")
-        _ASTER_MENU_DISPLAYS+=("$display")
-        _ASTER_MENU_DESCRIPTIONS+=("${_ASTER_DAEMON_DESCRIPTIONS[$index]}")
-        _ASTER_MENU_KINDS+=("${_ASTER_DAEMON_KINDS[$index]}")
-        _ASTER_MENU_SOURCES+=("${_ASTER_DAEMON_SOURCES[$index]}")
-        (( ${#_ASTER_MENU_ACCEPTS} >= limit )) && break
-      done
-    fi
-
-    if (( ${#_ASTER_MENU_ACCEPTS} < limit )); then
-      for (( index = 1; index <= ${#_ASTER_NATIVE_ACCEPTS}; index++ )); do
-        display="${_ASTER_NATIVE_DISPLAYS[$index]}"
-        [[ -n "$display" ]] && (( ! ${_ASTER_MENU_DISPLAYS[(Ie)$display]} )) || continue
-        _ASTER_MENU_ACCEPTS+=("${_ASTER_NATIVE_ACCEPTS[$index]}")
-        _ASTER_MENU_DISPLAYS+=("$display")
-        _ASTER_MENU_DESCRIPTIONS+=("${_ASTER_NATIVE_DESCRIPTIONS[$index]}")
-        _ASTER_MENU_KINDS+=("native")
-        _ASTER_MENU_SOURCES+=("native")
-        (( ${#_ASTER_MENU_ACCEPTS} >= limit )) && break
-      done
-    fi
-
-    if (( ${#_ASTER_MENU_ACCEPTS} < limit )); then
-      for (( index = 1; index <= ${#_ASTER_DAEMON_ACCEPTS}; index++ )); do
-        [[ "${_ASTER_DAEMON_SOURCES[$index]}" == history ||
-           "${_ASTER_DAEMON_SOURCES[$index]}" == filesystem ||
-           "${_ASTER_DAEMON_SOURCES[$index]}" == help ]] && continue
-        display="${_ASTER_DAEMON_DISPLAYS[$index]}"
-        [[ -n "$display" ]] && (( ! ${_ASTER_MENU_DISPLAYS[(Ie)$display]} )) || continue
-        _ASTER_MENU_ACCEPTS+=("${_ASTER_DAEMON_ACCEPTS[$index]}")
-        _ASTER_MENU_DISPLAYS+=("$display")
-        _ASTER_MENU_DESCRIPTIONS+=("${_ASTER_DAEMON_DESCRIPTIONS[$index]}")
-        _ASTER_MENU_KINDS+=("${_ASTER_DAEMON_KINDS[$index]}")
-        _ASTER_MENU_SOURCES+=("${_ASTER_DAEMON_SOURCES[$index]}")
-        (( ${#_ASTER_MENU_ACCEPTS} >= limit )) && break
-      done
-    fi
-
-    _ASTER_MENU_RESTORE_INDEX=$_ASTER_MENU_INDEX
+    _ZSUGGESTION_MENU_RESTORE_INDEX=$_ZSUGGESTION_MENU_INDEX
     zstyle -a zle-line-pre-redraw widgets redraw_hooks
     apply_hooks=( "${(@)redraw_hooks:#*:_zsh_highlight__zle-line-pre-redraw}" )
     if (( ${#apply_hooks} != ${#redraw_hooks} )); then
       zstyle zle-line-pre-redraw widgets "${apply_hooks[@]}"
       {
-        zle aster-menu-apply
+        zle zsuggestion-menu-apply
       } always {
         zstyle zle-line-pre-redraw widgets "${redraw_hooks[@]}"
       }
     else
-      zle aster-menu-apply
+      zle zsuggestion-menu-apply
     fi
-    region_highlight=( "${_ASTER_RENDERED_HIGHLIGHTS[@]}" )
+    region_highlight=( "${_ZSUGGESTION_RENDERED_HIGHLIGHTS[@]}" )
   }
 
-  _aster_menu_request_ready() {
+  _zsuggestion_menu_request_ready() {
     local fd="$1" accept display description kind source pending response_pending
     local any_pending=0
     local -a accepts displays descriptions kinds sources
-    if (( fd != _ASTER_MENU_REQUEST_FD )); then
+    if (( fd != _ZSUGGESTION_MENU_REQUEST_FD )); then
       zle -F "$fd" 2>/dev/null
       exec {fd}<&-
       return 0
     fi
-    if [[ "$_ASTER_MENU_BUFFER" != "$_ASTER_MENU_INFLIGHT_BUFFER" ]]; then
+    if [[ "$_ZSUGGESTION_MENU_BUFFER" != "$_ZSUGGESTION_MENU_INFLIGHT_BUFFER" ]]; then
       zle -F "$fd" 2>/dev/null
       exec {fd}<&-
-      _ASTER_MENU_REQUEST_FD=-1
-      _ASTER_MENU_INFLIGHT_BUFFER=""
-      _ASTER_MENU_INFLIGHT_CURSOR=0
+      _ZSUGGESTION_MENU_REQUEST_FD=-1
+      _ZSUGGESTION_MENU_INFLIGHT_BUFFER=""
+      _ZSUGGESTION_MENU_INFLIGHT_CURSOR=0
       return 0
     fi
 
     zle -F "$fd"
-    BUFFER="$_ASTER_MENU_INFLIGHT_BUFFER"
-    CURSOR=$_ASTER_MENU_INFLIGHT_CURSOR
+    BUFFER="$_ZSUGGESTION_MENU_INFLIGHT_BUFFER"
+    CURSOR=$_ZSUGGESTION_MENU_INFLIGHT_CURSOR
     if IFS= read -r -u "$fd" -d '' response_pending && [[ "$response_pending" == true ]]; then
       any_pending=1
     fi
@@ -1676,43 +1649,43 @@ if [[ -o interactive ]] && (( $+commands[aster] )); then
     done
     exec {fd}<&-
 
-    _ASTER_MENU_REQUEST_FD=-1
-    _ASTER_DAEMON_ACCEPTS=("${accepts[@]}")
-    _ASTER_DAEMON_DISPLAYS=("${displays[@]}")
-    _ASTER_DAEMON_DESCRIPTIONS=("${descriptions[@]}")
-    _ASTER_DAEMON_KINDS=("${kinds[@]}")
-    _ASTER_DAEMON_SOURCES=("${sources[@]}")
-    (( any_pending )) && _ASTER_MENU_REFRESH_TICKS=5 || _ASTER_MENU_REFRESH_TICKS=0
-    if (( ! _ASTER_FUZZY_ACTIVE && ${#accepts} == 0 && _ASTER_MENU_ACTIVE &&
+    _ZSUGGESTION_MENU_REQUEST_FD=-1
+    _ZSUGGESTION_DAEMON_ACCEPTS=("${accepts[@]}")
+    _ZSUGGESTION_DAEMON_DISPLAYS=("${displays[@]}")
+    _ZSUGGESTION_DAEMON_DESCRIPTIONS=("${descriptions[@]}")
+    _ZSUGGESTION_DAEMON_KINDS=("${kinds[@]}")
+    _ZSUGGESTION_DAEMON_SOURCES=("${sources[@]}")
+    (( any_pending )) && _ZSUGGESTION_MENU_REFRESH_TICKS=5 || _ZSUGGESTION_MENU_REFRESH_TICKS=0
+    if (( ! _ZSUGGESTION_FUZZY_ACTIVE && ${#accepts} == 0 && _ZSUGGESTION_MENU_ACTIVE &&
           $+functions[_main_complete] )) &&
-       (( ! _ASTER_NATIVE_REQUESTED || _ASTER_NATIVE_REQUEST_FD >= 0 )); then
+       (( ! _ZSUGGESTION_NATIVE_REQUESTED || _ZSUGGESTION_NATIVE_REQUEST_FD >= 0 )); then
       return 0
     fi
-    _aster_menu_publish
+    _zsuggestion_menu_publish
   }
 
-  _aster_native_request_ready() {
+  _zsuggestion_native_request_ready() {
     local fd="$1" accept display description
     local -a accepts displays descriptions
-    if (( fd != _ASTER_NATIVE_REQUEST_FD )); then
+    if (( fd != _ZSUGGESTION_NATIVE_REQUEST_FD )); then
       zle -F "$fd" 2>/dev/null
       exec {fd}<&-
       return 0
     fi
-    if [[ "$_ASTER_MENU_BUFFER" != "$_ASTER_NATIVE_INFLIGHT_BUFFER" ]]; then
+    if [[ "$_ZSUGGESTION_MENU_BUFFER" != "$_ZSUGGESTION_NATIVE_INFLIGHT_BUFFER" ]]; then
       zle -F "$fd" 2>/dev/null
       exec {fd}<&-
-      _ASTER_NATIVE_REQUEST_FD=-1
-      _ASTER_NATIVE_REQUEST_PID=-1
-      _ASTER_NATIVE_REQUEST_TICKS=0
-      _ASTER_NATIVE_INFLIGHT_BUFFER=""
-      _ASTER_NATIVE_INFLIGHT_CURSOR=0
+      _ZSUGGESTION_NATIVE_REQUEST_FD=-1
+      _ZSUGGESTION_NATIVE_REQUEST_PID=-1
+      _ZSUGGESTION_NATIVE_REQUEST_TICKS=0
+      _ZSUGGESTION_NATIVE_INFLIGHT_BUFFER=""
+      _ZSUGGESTION_NATIVE_INFLIGHT_CURSOR=0
       return 0
     fi
 
     zle -F "$fd"
-    BUFFER="$_ASTER_NATIVE_INFLIGHT_BUFFER"
-    CURSOR=$_ASTER_NATIVE_INFLIGHT_CURSOR
+    BUFFER="$_ZSUGGESTION_NATIVE_INFLIGHT_BUFFER"
+    CURSOR=$_ZSUGGESTION_NATIVE_INFLIGHT_CURSOR
     while IFS= read -r -u "$fd" -d '' accept &&
           IFS= read -r -u "$fd" -d '' display &&
           IFS= read -r -u "$fd" -d '' description; do
@@ -1721,17 +1694,17 @@ if [[ -o interactive ]] && (( $+commands[aster] )); then
       descriptions+=("$description")
     done
     exec {fd}<&-
-    _ASTER_NATIVE_REQUEST_FD=-1
-    _ASTER_NATIVE_REQUEST_PID=-1
-    _ASTER_NATIVE_REQUEST_TICKS=0
+    _ZSUGGESTION_NATIVE_REQUEST_FD=-1
+    _ZSUGGESTION_NATIVE_REQUEST_PID=-1
+    _ZSUGGESTION_NATIVE_REQUEST_TICKS=0
 
-    _ASTER_NATIVE_ACCEPTS=("${accepts[@]}")
-    _ASTER_NATIVE_DISPLAYS=("${displays[@]}")
-    _ASTER_NATIVE_DESCRIPTIONS=("${descriptions[@]}")
-    _aster_menu_publish
+    _ZSUGGESTION_NATIVE_ACCEPTS=("${accepts[@]}")
+    _ZSUGGESTION_NATIVE_DISPLAYS=("${displays[@]}")
+    _ZSUGGESTION_NATIVE_DESCRIPTIONS=("${descriptions[@]}")
+    _zsuggestion_menu_publish
   }
 
-  _aster_native_capture_widget() {
+  _zsuggestion_native_capture_widget() {
     local fd
     exec {fd}< <(
       local original_lbuffer="$LBUFFER"
@@ -1786,7 +1759,7 @@ if [[ -o interactive ]] && (( $+commands[aster] )); then
              [[ -z "$current_prefix" ||
                 "${original_lbuffer[$(( base_length + 1 )),-1]}" == "$current_prefix" ]]; then
             for match in "${generated[@]}"; do
-              (( ${#displays} < __ASTER_COMPLETION_MAX_CANDIDATES__ )) || break
+              (( ${#displays} < __ZSUGGESTION_COMPLETION_MAX_CANDIDATES__ )) || break
               [[ -n "$match" && "${(q)match}" == "$match" ]] || continue
               [[ -z "$current_prefix" ||
                  "${match[1,${#current_prefix}]}" == "$current_prefix" ]] || continue
@@ -1816,52 +1789,52 @@ if [[ -o interactive ]] && (( $+commands[aster] )); then
           "${descriptions[$index]}"
       done
     )
-    _ASTER_NATIVE_REQUEST_FD="$fd"
-    _ASTER_NATIVE_REQUEST_PID=$!
-    _ASTER_NATIVE_REQUEST_TICKS=0
-    zle -F "$fd" _aster_native_request_ready
+    _ZSUGGESTION_NATIVE_REQUEST_FD="$fd"
+    _ZSUGGESTION_NATIVE_REQUEST_PID=$!
+    _ZSUGGESTION_NATIVE_REQUEST_TICKS=0
+    zle -F "$fd" _zsuggestion_native_request_ready
     compstate[insert]=''
     compstate[list]=''
   }
 
-  _aster_menu_apply_result() {
+  _zsuggestion_menu_apply_result() {
     local -a rendered_highlights
-    if (( ${#_ASTER_MENU_ACCEPTS} == 0 )); then
-      _ASTER_MENU_ACTIVE=0
-      region_highlight=( "${_ASTER_FOREIGN_HIGHLIGHTS[@]}" )
-      if (( _ASTER_FUZZY_ACTIVE )); then
-        _aster_menu_render
+    if (( ${#_ZSUGGESTION_MENU_ACCEPTS} == 0 )); then
+      _ZSUGGESTION_MENU_ACTIVE=0
+      region_highlight=( "${_ZSUGGESTION_FOREIGN_HIGHLIGHTS[@]}" )
+      if (( _ZSUGGESTION_FUZZY_ACTIVE )); then
+        _zsuggestion_menu_render
       else
         POSTDISPLAY=""
       fi
       rendered_highlights=( "${region_highlight[@]}" )
-      _ASTER_RENDERED_HIGHLIGHTS=( "${rendered_highlights[@]}" )
-      _ASTER_RESTORE_HIGHLIGHTS=1
+      _ZSUGGESTION_RENDERED_HIGHLIGHTS=( "${rendered_highlights[@]}" )
+      _ZSUGGESTION_RESTORE_HIGHLIGHTS=1
       zle -R
       region_highlight=( "${rendered_highlights[@]}" )
       return 0
     fi
-    _ASTER_MENU_ACTIVE=1
-    _ASTER_MENU_INDEX=$_ASTER_MENU_RESTORE_INDEX
-    (( _ASTER_MENU_INDEX > ${#_ASTER_MENU_DISPLAYS} )) && _ASTER_MENU_INDEX=${#_ASTER_MENU_DISPLAYS}
-    (( _ASTER_MENU_INDEX < 1 )) && _ASTER_MENU_INDEX=1
-    _ASTER_MENU_RESTORE_INDEX=1
-    _ASTER_MENU_START=$_ASTER_MENU_INDEX
-    _ASTER_MENU_BUFFER="$_ASTER_MENU_REQUEST_BUFFER"
-    region_highlight=( "${_ASTER_FOREIGN_HIGHLIGHTS[@]}" )
-    _aster_menu_render
+    _ZSUGGESTION_MENU_ACTIVE=1
+    _ZSUGGESTION_MENU_INDEX=$_ZSUGGESTION_MENU_RESTORE_INDEX
+    (( _ZSUGGESTION_MENU_INDEX > ${#_ZSUGGESTION_MENU_DISPLAYS} )) && _ZSUGGESTION_MENU_INDEX=${#_ZSUGGESTION_MENU_DISPLAYS}
+    (( _ZSUGGESTION_MENU_INDEX < 1 )) && _ZSUGGESTION_MENU_INDEX=1
+    _ZSUGGESTION_MENU_RESTORE_INDEX=1
+    _ZSUGGESTION_MENU_START=$_ZSUGGESTION_MENU_INDEX
+    _ZSUGGESTION_MENU_BUFFER="$_ZSUGGESTION_MENU_REQUEST_BUFFER"
+    region_highlight=( "${_ZSUGGESTION_FOREIGN_HIGHLIGHTS[@]}" )
+    _zsuggestion_menu_render
     rendered_highlights=( "${region_highlight[@]}" )
-    _ASTER_RENDERED_HIGHLIGHTS=( "${rendered_highlights[@]}" )
-    _ASTER_RESTORE_HIGHLIGHTS=1
+    _ZSUGGESTION_RENDERED_HIGHLIGHTS=( "${rendered_highlights[@]}" )
+    _ZSUGGESTION_RESTORE_HIGHLIGHTS=1
     zle -R
     region_highlight=( "${rendered_highlights[@]}" )
   }
 
-  _aster_menu_start_ticker() {
-    (( _ASTER_MENU_TICK_FD >= 0 )) && return 0
+  _zsuggestion_menu_start_ticker() {
+    (( _ZSUGGESTION_MENU_TICK_FD >= 0 )) && return 0
     local fd
     exec {fd}< <(
-      if (( _ASTER_HAS_ZSELECT )); then
+      if (( _ZSUGGESTION_HAS_ZSELECT )); then
         while true; do
           zselect -t 3
           print -r -- tick || exit
@@ -1872,539 +1845,539 @@ if [[ -o interactive ]] && (( $+commands[aster] )); then
         done
       fi
     )
-    _ASTER_MENU_TICK_FD="$fd"
-    zle -F "$fd" _aster_menu_tick
+    _ZSUGGESTION_MENU_TICK_FD="$fd"
+    zle -F "$fd" _zsuggestion_menu_tick
   }
 
-  _aster_menu_stop_ticker() {
-    local fd="$_ASTER_MENU_TICK_FD"
+  _zsuggestion_menu_stop_ticker() {
+    local fd="$_ZSUGGESTION_MENU_TICK_FD"
     if (( fd >= 0 )); then
       zle -F "$fd" 2>/dev/null
       exec {fd}<&-
-      _ASTER_MENU_TICK_FD=-1
+      _ZSUGGESTION_MENU_TICK_FD=-1
     fi
   }
 
-  _aster_menu_tick() {
+  _zsuggestion_menu_tick() {
     local fd="$1" tick query_fd buffer cwd cursor
-    if (( fd != _ASTER_MENU_TICK_FD )) || ! IFS= read -r -u "$fd" tick; then
+    if (( fd != _ZSUGGESTION_MENU_TICK_FD )) || ! IFS= read -r -u "$fd" tick; then
       zle -F "$fd" 2>/dev/null
       exec {fd}<&-
-      _ASTER_MENU_TICK_FD=-1
+      _ZSUGGESTION_MENU_TICK_FD=-1
       return 0
     fi
-    (( _ASTER_IN_NATIVE_COMPLETION )) && return 0
-    if [[ -n "$_ASTER_PREVIEW_PATH" || -n "$_ASTER_PREVIEW_COMMAND" ]]; then
-      (( _ASTER_PREVIEW_TICKS++ ))
-      if (( _ASTER_PREVIEW_FD < 0 && _ASTER_PREVIEW_TICKS >= 2 )); then
-        local preview_fd preview_target="$_ASTER_PREVIEW_TARGET"
+    (( _ZSUGGESTION_IN_NATIVE_COMPLETION )) && return 0
+    if [[ -n "$_ZSUGGESTION_PREVIEW_PATH" || -n "$_ZSUGGESTION_PREVIEW_COMMAND" ]]; then
+      (( _ZSUGGESTION_PREVIEW_TICKS++ ))
+      if (( _ZSUGGESTION_PREVIEW_FD < 0 && _ZSUGGESTION_PREVIEW_TICKS >= 2 )); then
+        local preview_fd preview_target="$_ZSUGGESTION_PREVIEW_TARGET"
         exec {preview_fd}< <(
           print -rn -- "$preview_target"$'\0'
-          if [[ -n "$_ASTER_PREVIEW_COMMAND" ]]; then
-            command aster preview-command \
-              --line "$_ASTER_PREVIEW_COMMAND" \
+          if [[ -n "$_ZSUGGESTION_PREVIEW_COMMAND" ]]; then
+            command zsuggestion preview-command \
+              --line "$_ZSUGGESTION_PREVIEW_COMMAND" \
               --cwd "$PWD" 2>/dev/null
           else
-            command aster preview-file \
-              --path "$_ASTER_PREVIEW_PATH" \
+            command zsuggestion preview-file \
+              --path "$_ZSUGGESTION_PREVIEW_PATH" \
               --cwd "$PWD" 2>/dev/null
           fi
         )
-        _ASTER_PREVIEW_FD="$preview_fd"
-        _ASTER_PREVIEW_PID=$!
-        _ASTER_PREVIEW_TICKS=0
-        zle -F "$preview_fd" _aster_preview_ready
-      elif (( _ASTER_PREVIEW_FD >= 0 && _ASTER_PREVIEW_TICKS > 34 )); then
-        _aster_preview_cancel
-        _ASTER_PREVIEW_PATH=""
-        _ASTER_PREVIEW_COMMAND=""
-        _ASTER_PREVIEW_LINES=("Preview timed out")
-        _ASTER_PREVIEW_STYLES=("")
+        _ZSUGGESTION_PREVIEW_FD="$preview_fd"
+        _ZSUGGESTION_PREVIEW_PID=$!
+        _ZSUGGESTION_PREVIEW_TICKS=0
+        zle -F "$preview_fd" _zsuggestion_preview_ready
+      elif (( _ZSUGGESTION_PREVIEW_FD >= 0 && _ZSUGGESTION_PREVIEW_TICKS > 34 )); then
+        _zsuggestion_preview_cancel
+        _ZSUGGESTION_PREVIEW_PATH=""
+        _ZSUGGESTION_PREVIEW_COMMAND=""
+        _ZSUGGESTION_PREVIEW_LINES=("Preview timed out")
+        _ZSUGGESTION_PREVIEW_STYLES=("")
         zle -R
       fi
     fi
-    if (( _ASTER_NATIVE_REQUEST_FD >= 0 )); then
-      (( _ASTER_NATIVE_REQUEST_TICKS++ ))
-      if (( _ASTER_NATIVE_REQUEST_TICKS > 50 )); then
-        _aster_native_cancel
-        _aster_menu_publish
+    if (( _ZSUGGESTION_NATIVE_REQUEST_FD >= 0 )); then
+      (( _ZSUGGESTION_NATIVE_REQUEST_TICKS++ ))
+      if (( _ZSUGGESTION_NATIVE_REQUEST_TICKS > 50 )); then
+        _zsuggestion_native_cancel
+        _zsuggestion_menu_publish
       fi
     fi
-    if (( ! _ASTER_FUZZY_ACTIVE && ! _ASTER_NATIVE_REQUESTED )) &&
-       [[ -n "$_ASTER_MENU_REQUEST_BUFFER" ]]; then
-      (( _ASTER_NATIVE_START_TICKS++ ))
-      if (( _ASTER_NATIVE_START_TICKS >= 2 )) && (( $+functions[_main_complete] )); then
-        _ASTER_NATIVE_REQUESTED=1
-        _ASTER_NATIVE_INFLIGHT_BUFFER="$_ASTER_MENU_REQUEST_BUFFER"
-        _ASTER_NATIVE_INFLIGHT_CURSOR=$_ASTER_MENU_REQUEST_CURSOR
-        _aster_call_native_completion aster-native-capture
+    if (( ! _ZSUGGESTION_FUZZY_ACTIVE && ! _ZSUGGESTION_NATIVE_REQUESTED )) &&
+       [[ -n "$_ZSUGGESTION_MENU_REQUEST_BUFFER" ]]; then
+      (( _ZSUGGESTION_NATIVE_START_TICKS++ ))
+      if (( _ZSUGGESTION_NATIVE_START_TICKS >= 2 )) && (( $+functions[_main_complete] )); then
+        _ZSUGGESTION_NATIVE_REQUESTED=1
+        _ZSUGGESTION_NATIVE_INFLIGHT_BUFFER="$_ZSUGGESTION_MENU_REQUEST_BUFFER"
+        _ZSUGGESTION_NATIVE_INFLIGHT_CURSOR=$_ZSUGGESTION_MENU_REQUEST_CURSOR
+        _zsuggestion_call_native_completion zsuggestion-native-capture
       fi
     fi
-    if (( ! _ASTER_MENU_REQUEST_DIRTY )); then
-      (( _ASTER_MENU_REFRESH_TICKS > 0 )) || return 0
-      (( _ASTER_MENU_REFRESH_TICKS-- ))
-      (( _ASTER_MENU_REFRESH_TICKS == 0 )) || return 0
-      _ASTER_MENU_REQUEST_DIRTY=1
+    if (( ! _ZSUGGESTION_MENU_REQUEST_DIRTY )); then
+      (( _ZSUGGESTION_MENU_REFRESH_TICKS > 0 )) || return 0
+      (( _ZSUGGESTION_MENU_REFRESH_TICKS-- ))
+      (( _ZSUGGESTION_MENU_REFRESH_TICKS == 0 )) || return 0
+      _ZSUGGESTION_MENU_REQUEST_DIRTY=1
     fi
 
-    _ASTER_MENU_REQUEST_DIRTY=0
-    buffer="$_ASTER_MENU_REQUEST_BUFFER"
-    cwd="$_ASTER_MENU_REQUEST_CWD"
-    cursor="$_ASTER_MENU_REQUEST_CURSOR"
+    _ZSUGGESTION_MENU_REQUEST_DIRTY=0
+    buffer="$_ZSUGGESTION_MENU_REQUEST_BUFFER"
+    cwd="$_ZSUGGESTION_MENU_REQUEST_CWD"
+    cursor="$_ZSUGGESTION_MENU_REQUEST_CURSOR"
     if [[ -z "$buffer" ]]; then
       return 0
     fi
 
-    _aster_menu_cancel_query
-    _ASTER_MENU_INFLIGHT_BUFFER="$buffer"
-    _ASTER_MENU_INFLIGHT_CURSOR=$cursor
-    if (( _ASTER_FUZZY_ACTIVE )); then
-      exec {query_fd}< <(command aster fuzzy \
-        --query "$_ASTER_FUZZY_QUERY" \
+    _zsuggestion_menu_cancel_query
+    _ZSUGGESTION_MENU_INFLIGHT_BUFFER="$buffer"
+    _ZSUGGESTION_MENU_INFLIGHT_CURSOR=$cursor
+    if (( _ZSUGGESTION_FUZZY_ACTIVE )); then
+      exec {query_fd}< <(command zsuggestion fuzzy \
+        --query "$_ZSUGGESTION_FUZZY_QUERY" \
         --cwd "$cwd" \
         --format zsh-v3 2>/dev/null)
     else
-      exec {query_fd}< <(print -rn -- "$buffer" | command aster complete \
+      exec {query_fd}< <(print -rn -- "$buffer" | command zsuggestion complete \
         --stdin \
         --cursor "$cursor" \
         --cwd "$cwd" \
         --format zsh-v3 2>/dev/null)
     fi
-    _ASTER_MENU_REQUEST_FD="$query_fd"
-    zle -F "$query_fd" _aster_menu_request_ready
+    _ZSUGGESTION_MENU_REQUEST_FD="$query_fd"
+    zle -F "$query_fd" _zsuggestion_menu_request_ready
   }
 
-  _aster_menu_line_init() {
-    _ASTER_FUZZY_ACTIVE=0
-    _ASTER_FUZZY_BASE=""
-    _ASTER_FUZZY_QUERY=""
+  _zsuggestion_menu_line_init() {
+    _ZSUGGESTION_FUZZY_ACTIVE=0
+    _ZSUGGESTION_FUZZY_BASE=""
+    _ZSUGGESTION_FUZZY_QUERY=""
     POSTDISPLAY=""
-    _ASTER_MENU_BUFFER="$BUFFER"
-    _aster_menu_start_ticker
+    _ZSUGGESTION_MENU_BUFFER="$BUFFER"
+    _zsuggestion_menu_start_ticker
   }
 
-  _aster_menu_line_finish() {
-    _aster_menu_clear
-    _aster_menu_stop_ticker
+  _zsuggestion_menu_line_finish() {
+    _zsuggestion_menu_clear
+    _zsuggestion_menu_stop_ticker
   }
 
-  _aster_self_insert() {
-    if (( _ASTER_IN_BRACKETED_PASTE )); then
-      zle _aster-native-self-insert
+  _zsuggestion_self_insert() {
+    if (( _ZSUGGESTION_IN_BRACKETED_PASTE )); then
+      zle _zsuggestion-native-self-insert
       return
     fi
-    if (( _ASTER_FUZZY_ACTIVE )); then
-      _ASTER_FUZZY_QUERY+="$KEYS"
-      _aster_fuzzy_refresh
+    if (( _ZSUGGESTION_FUZZY_ACTIVE )); then
+      _ZSUGGESTION_FUZZY_QUERY+="$KEYS"
+      _zsuggestion_fuzzy_refresh
       return
     fi
-    zle _aster-native-self-insert
-    _aster_menu_refresh
+    zle _zsuggestion-native-self-insert
+    _zsuggestion_menu_refresh
   }
 
-  _aster_space() {
-    if (( _ASTER_FUZZY_ACTIVE )); then
-      _ASTER_FUZZY_QUERY+=" "
-      _aster_fuzzy_refresh
+  _zsuggestion_space() {
+    if (( _ZSUGGESTION_FUZZY_ACTIVE )); then
+      _ZSUGGESTION_FUZZY_QUERY+=" "
+      _zsuggestion_fuzzy_refresh
       return
     fi
     if [[ "$LBUFFER" == *" " ]] && (( CURSOR == ${#BUFFER} )); then
       LBUFFER="${LBUFFER% }"
-      _aster_fuzzy_start
+      _zsuggestion_fuzzy_start
       return
     fi
-    zle _aster-native-space
-    _aster_menu_refresh
+    zle _zsuggestion-native-space
+    _zsuggestion_menu_refresh
   }
 
-  _aster_backward_delete() {
-    if (( _ASTER_FUZZY_ACTIVE )); then
-      if [[ -n "$_ASTER_FUZZY_QUERY" ]]; then
-        _ASTER_FUZZY_QUERY="${_ASTER_FUZZY_QUERY[1,-2]}"
-        _aster_fuzzy_refresh
+  _zsuggestion_backward_delete() {
+    if (( _ZSUGGESTION_FUZZY_ACTIVE )); then
+      if [[ -n "$_ZSUGGESTION_FUZZY_QUERY" ]]; then
+        _ZSUGGESTION_FUZZY_QUERY="${_ZSUGGESTION_FUZZY_QUERY[1,-2]}"
+        _zsuggestion_fuzzy_refresh
       else
-        _aster_menu_clear
-        zle _aster-native-backward-delete
-        _aster_menu_refresh
+        _zsuggestion_menu_clear
+        zle _zsuggestion-native-backward-delete
+        _zsuggestion_menu_refresh
       fi
       return
     fi
-    zle _aster-native-backward-delete
-    _aster_menu_refresh
+    zle _zsuggestion-native-backward-delete
+    _zsuggestion_menu_refresh
   }
 
-  _aster_bracketed_paste() {
-    _aster_menu_clear 1
+  _zsuggestion_bracketed_paste() {
+    _zsuggestion_menu_clear 1
     POSTDISPLAY=""
-    _ASTER_IN_BRACKETED_PASTE=1
+    _ZSUGGESTION_IN_BRACKETED_PASTE=1
     {
-      zle _aster-native-bracketed-paste
+      zle _zsuggestion-native-bracketed-paste
     } always {
-      _ASTER_IN_BRACKETED_PASTE=0
+      _ZSUGGESTION_IN_BRACKETED_PASTE=0
     }
-    _aster_menu_refresh
+    _zsuggestion_menu_refresh
   }
 
-  _aster_interrupt() {
-    _aster_menu_clear
+  _zsuggestion_interrupt() {
+    _zsuggestion_menu_clear
     POSTDISPLAY=""
-    _ASTER_FUZZY_ACTIVE=0
-    _ASTER_FUZZY_BASE=""
-    _ASTER_FUZZY_QUERY=""
-    _ASTER_MENU_REQUEST_BUFFER=""
-    zle _aster-native-interrupt
+    _ZSUGGESTION_FUZZY_ACTIVE=0
+    _ZSUGGESTION_FUZZY_BASE=""
+    _ZSUGGESTION_FUZZY_QUERY=""
+    _ZSUGGESTION_MENU_REQUEST_BUFFER=""
+    zle _zsuggestion-native-interrupt
   }
 
-  _aster_tab() {
-    if (( _ASTER_FUZZY_ACTIVE )); then
-      if (( _ASTER_MENU_ACTIVE )); then
-        _aster_menu_accept
+  _zsuggestion_tab() {
+    if (( _ZSUGGESTION_FUZZY_ACTIVE )); then
+      if (( _ZSUGGESTION_MENU_ACTIVE )); then
+        _zsuggestion_menu_accept
       else
         zle beep
       fi
       return
     fi
-    if (( _ASTER_MENU_ACTIVE && CURSOR == ${#BUFFER} )); then
-      if [[ "${_ASTER_MENU_KINDS[$_ASTER_MENU_INDEX]}" == file ||
-            "${_ASTER_MENU_KINDS[$_ASTER_MENU_INDEX]}" == directory ]]; then
-        _aster_path_accept
+    if (( _ZSUGGESTION_MENU_ACTIVE && CURSOR == ${#BUFFER} )); then
+      if [[ "${_ZSUGGESTION_MENU_KINDS[$_ZSUGGESTION_MENU_INDEX]}" == file ||
+            "${_ZSUGGESTION_MENU_KINDS[$_ZSUGGESTION_MENU_INDEX]}" == directory ]]; then
+        _zsuggestion_path_accept
         return
       fi
-      _aster_menu_accept segment
+      _zsuggestion_menu_accept segment
       return
     fi
-    _aster_menu_clear
+    _zsuggestion_menu_clear
     POSTDISPLAY=""
-    _aster_call_native_completion _aster-native-tab
-    _ASTER_MENU_BUFFER="$BUFFER"
+    _zsuggestion_call_native_completion _zsuggestion-native-tab
+    _ZSUGGESTION_MENU_BUFFER="$BUFFER"
   }
 
-  _aster_shift_tab() {
-    if (( _ASTER_MENU_ACTIVE )); then
-      (( _ASTER_MENU_INDEX > 1 )) && (( _ASTER_MENU_INDEX-- ))
-      _aster_menu_render
+  _zsuggestion_shift_tab() {
+    if (( _ZSUGGESTION_MENU_ACTIVE )); then
+      (( _ZSUGGESTION_MENU_INDEX > 1 )) && (( _ZSUGGESTION_MENU_INDEX-- ))
+      _zsuggestion_menu_render
       zle -R
       return
     fi
-    if (( _ASTER_FUZZY_ACTIVE )); then
+    if (( _ZSUGGESTION_FUZZY_ACTIVE )); then
       zle beep
       return
     fi
-    _aster_menu_clear
+    _zsuggestion_menu_clear
     POSTDISPLAY=""
-    _aster_call_native_completion _aster-native-shift-tab
-    _ASTER_MENU_BUFFER="$BUFFER"
+    _zsuggestion_call_native_completion _zsuggestion-native-shift-tab
+    _ZSUGGESTION_MENU_BUFFER="$BUFFER"
   }
 
-  _aster_complete() {
-    if (( _ASTER_FUZZY_ACTIVE && ! _ASTER_MENU_ACTIVE )); then
+  _zsuggestion_complete() {
+    if (( _ZSUGGESTION_FUZZY_ACTIVE && ! _ZSUGGESTION_MENU_ACTIVE )); then
       zle beep
       return
     fi
-    if (( _ASTER_MENU_ACTIVE && CURSOR == ${#BUFFER} )); then
-      _aster_menu_accept
-    elif (( CURSOR == ${#BUFFER} )) && _aster_menu_query; then
-      _aster_menu_accept
+    if (( _ZSUGGESTION_MENU_ACTIVE && CURSOR == ${#BUFFER} )); then
+      _zsuggestion_menu_accept
+    elif (( CURSOR == ${#BUFFER} )) && _zsuggestion_menu_query; then
+      _zsuggestion_menu_accept
     else
-      (( _ASTER_MENU_ACTIVE )) && _aster_menu_clear 1
-      _aster_call_native_completion _aster-native-trigger
+      (( _ZSUGGESTION_MENU_ACTIVE )) && _zsuggestion_menu_clear 1
+      _zsuggestion_call_native_completion _zsuggestion-native-trigger
     fi
   }
 
-  _aster_fuzzy_execute() {
-    if (( ! _ASTER_FUZZY_ACTIVE || ! _ASTER_MENU_ACTIVE )); then
+  _zsuggestion_fuzzy_execute() {
+    if (( ! _ZSUGGESTION_FUZZY_ACTIVE || ! _ZSUGGESTION_MENU_ACTIVE )); then
       zle beep
       return
     fi
-    _aster_menu_accept || return
-    zle _aster-native-enter
+    _zsuggestion_menu_accept || return
+    zle _zsuggestion-native-enter
   }
 
-  _aster_menu_down() {
-    if (( _ASTER_MENU_ACTIVE )); then
-      (( _ASTER_MENU_INDEX < ${#_ASTER_MENU_ACCEPTS} )) && (( _ASTER_MENU_INDEX++ ))
-      _aster_menu_render
+  _zsuggestion_menu_down() {
+    if (( _ZSUGGESTION_MENU_ACTIVE )); then
+      (( _ZSUGGESTION_MENU_INDEX < ${#_ZSUGGESTION_MENU_ACCEPTS} )) && (( _ZSUGGESTION_MENU_INDEX++ ))
+      _zsuggestion_menu_render
       zle -R
-    elif (( _ASTER_FUZZY_ACTIVE )); then
+    elif (( _ZSUGGESTION_FUZZY_ACTIVE )); then
       zle beep
     else
-      zle _aster-native-down
-      _aster_menu_refresh
+      zle _zsuggestion-native-down
+      _zsuggestion_menu_refresh
     fi
   }
 
-  _aster_menu_up() {
-    if (( _ASTER_MENU_ACTIVE )); then
-      (( _ASTER_MENU_INDEX > 1 )) && (( _ASTER_MENU_INDEX-- ))
-      _aster_menu_render
+  _zsuggestion_menu_up() {
+    if (( _ZSUGGESTION_MENU_ACTIVE )); then
+      (( _ZSUGGESTION_MENU_INDEX > 1 )) && (( _ZSUGGESTION_MENU_INDEX-- ))
+      _zsuggestion_menu_render
       zle -R
-    elif (( _ASTER_FUZZY_ACTIVE )); then
+    elif (( _ZSUGGESTION_FUZZY_ACTIVE )); then
       zle beep
     else
-      zle _aster-native-up
-      _aster_menu_refresh
+      zle _zsuggestion-native-up
+      _zsuggestion_menu_refresh
     fi
   }
 
-  _aster_escape() {
-    if (( _ASTER_FUZZY_ACTIVE )); then
-      local base="$_ASTER_FUZZY_BASE"
-      _aster_menu_clear
+  _zsuggestion_escape() {
+    if (( _ZSUGGESTION_FUZZY_ACTIVE )); then
+      local base="$_ZSUGGESTION_FUZZY_BASE"
+      _zsuggestion_menu_clear
       BUFFER="$base"
       CURSOR=${#BUFFER}
-      _ASTER_MENU_BUFFER="$BUFFER"
-      [[ "$BUFFER" == *[![:space:]]* ]] && _aster_menu_schedule
-      region_highlight=( "${_ASTER_FOREIGN_HIGHLIGHTS[@]}" )
+      _ZSUGGESTION_MENU_BUFFER="$BUFFER"
+      [[ "$BUFFER" == *[![:space:]]* ]] && _zsuggestion_menu_schedule
+      region_highlight=( "${_ZSUGGESTION_FOREIGN_HIGHLIGHTS[@]}" )
       zle -R
       return
     fi
-    zle _aster-native-escape
+    zle _zsuggestion-native-escape
   }
 
-  _aster_history_move() {
+  _zsuggestion_history_move() {
     local native_widget="$1"
-    _aster_menu_clear 1
+    _zsuggestion_menu_clear 1
     POSTDISPLAY=""
     zle "$native_widget"
-    _ASTER_MENU_BUFFER="$BUFFER"
+    _ZSUGGESTION_MENU_BUFFER="$BUFFER"
     zle -R
   }
 
-  _aster_history_up() {
-    _aster_history_move _aster-native-history-up
+  _zsuggestion_history_up() {
+    _zsuggestion_history_move _zsuggestion-native-history-up
   }
 
-  _aster_history_up_application() {
-    _aster_history_move _aster-native-history-up-application
+  _zsuggestion_history_up_application() {
+    _zsuggestion_history_move _zsuggestion-native-history-up-application
   }
 
-  _aster_history_down() {
-    _aster_history_move _aster-native-history-down
+  _zsuggestion_history_down() {
+    _zsuggestion_history_move _zsuggestion-native-history-down
   }
 
-  _aster_history_down_application() {
-    _aster_history_move _aster-native-history-down-application
+  _zsuggestion_history_down_application() {
+    _zsuggestion_history_move _zsuggestion-native-history-down-application
   }
 
-  _aster_menu_pre_redraw() {
-    if (( _ASTER_CAPTURE_FOREIGN_HIGHLIGHTS )); then
-      _ASTER_FOREIGN_HIGHLIGHTS=( "${(@)region_highlight:#*memo=aster*}" )
-      _ASTER_CAPTURE_FOREIGN_HIGHLIGHTS=0
-    elif (( _ASTER_MENU_ACTIVE || _ASTER_FUZZY_ACTIVE )) &&
-         [[ "$BUFFER" == "$_ASTER_MENU_BUFFER" ]]; then
-      region_highlight=( "${_ASTER_FOREIGN_HIGHLIGHTS[@]}" )
-      _ASTER_RESTORE_HIGHLIGHTS=0
-    elif (( _ASTER_RESTORE_HIGHLIGHTS )); then
-      region_highlight=( "${_ASTER_FOREIGN_HIGHLIGHTS[@]}" )
-      _ASTER_RESTORE_HIGHLIGHTS=0
+  _zsuggestion_menu_pre_redraw() {
+    if (( _ZSUGGESTION_CAPTURE_FOREIGN_HIGHLIGHTS )); then
+      _ZSUGGESTION_FOREIGN_HIGHLIGHTS=( "${(@)region_highlight:#*memo=zsuggestion*}" )
+      _ZSUGGESTION_CAPTURE_FOREIGN_HIGHLIGHTS=0
+    elif (( _ZSUGGESTION_MENU_ACTIVE || _ZSUGGESTION_FUZZY_ACTIVE )) &&
+         [[ "$BUFFER" == "$_ZSUGGESTION_MENU_BUFFER" ]]; then
+      region_highlight=( "${_ZSUGGESTION_FOREIGN_HIGHLIGHTS[@]}" )
+      _ZSUGGESTION_RESTORE_HIGHLIGHTS=0
+    elif (( _ZSUGGESTION_RESTORE_HIGHLIGHTS )); then
+      region_highlight=( "${_ZSUGGESTION_FOREIGN_HIGHLIGHTS[@]}" )
+      _ZSUGGESTION_RESTORE_HIGHLIGHTS=0
     elif [[ -n "$BUFFER" ]]; then
-      _ASTER_FOREIGN_HIGHLIGHTS=( "${(@)region_highlight:#*memo=aster*}" )
-    elif [[ -n "$_ASTER_MENU_REQUEST_BUFFER" ]]; then
-      region_highlight=( "${_ASTER_FOREIGN_HIGHLIGHTS[@]}" )
+      _ZSUGGESTION_FOREIGN_HIGHLIGHTS=( "${(@)region_highlight:#*memo=zsuggestion*}" )
+    elif [[ -n "$_ZSUGGESTION_MENU_REQUEST_BUFFER" ]]; then
+      region_highlight=( "${_ZSUGGESTION_FOREIGN_HIGHLIGHTS[@]}" )
     else
-      _ASTER_FOREIGN_HIGHLIGHTS=()
+      _ZSUGGESTION_FOREIGN_HIGHLIGHTS=()
     fi
-    if [[ "$BUFFER" != "$_ASTER_MENU_BUFFER" ]]; then
-      _aster_menu_clear
-      _ASTER_MENU_BUFFER="$BUFFER"
-      [[ -n "$BUFFER" ]] && (( CURSOR == ${#BUFFER} )) && _aster_menu_schedule
+    if [[ "$BUFFER" != "$_ZSUGGESTION_MENU_BUFFER" ]]; then
+      _zsuggestion_menu_clear
+      _ZSUGGESTION_MENU_BUFFER="$BUFFER"
+      [[ -n "$BUFFER" ]] && (( CURSOR == ${#BUFFER} )) && _zsuggestion_menu_schedule
     elif (( CURSOR != ${#BUFFER} )); then
-      if (( _ASTER_FUZZY_ACTIVE )); then
-        _aster_menu_clear
-        _ASTER_MENU_BUFFER="$BUFFER"
+      if (( _ZSUGGESTION_FUZZY_ACTIVE )); then
+        _zsuggestion_menu_clear
+        _ZSUGGESTION_MENU_BUFFER="$BUFFER"
       else
-        _aster_menu_cancel_request
+        _zsuggestion_menu_cancel_request
       fi
     fi
-    (( _ASTER_MENU_ACTIVE || _ASTER_FUZZY_ACTIVE )) && _aster_menu_render
+    (( _ZSUGGESTION_MENU_ACTIVE || _ZSUGGESTION_FUZZY_ACTIVE )) && _zsuggestion_menu_render
   }
 
   autoload -Uz add-zsh-hook
   autoload -Uz add-zle-hook-widget
-  zmodload zsh/zselect 2>/dev/null && _ASTER_HAS_ZSELECT=1
+  zmodload zsh/zselect 2>/dev/null && _ZSUGGESTION_HAS_ZSELECT=1
   if (( $+functions[_zsh_autosuggest_bind_widgets] )); then
     typeset -g ZSH_AUTOSUGGEST_MANUAL_REBIND=1
     precmd_functions=(${precmd_functions:#_zsh_autosuggest_start})
   fi
-  add-zsh-hook preexec _aster_preexec
-  add-zsh-hook precmd _aster_precmd
-  add-zle-hook-widget line-init _aster_menu_line_init
-  add-zle-hook-widget line-finish _aster_menu_line_finish
-  add-zle-hook-widget line-pre-redraw _aster_menu_pre_redraw
-  preexec_functions=(_aster_preexec ${preexec_functions:#_aster_preexec})
-  precmd_functions=(_aster_precmd ${precmd_functions:#_aster_precmd})
+  add-zsh-hook preexec _zsuggestion_preexec
+  add-zsh-hook precmd _zsuggestion_precmd
+  add-zle-hook-widget line-init _zsuggestion_menu_line_init
+  add-zle-hook-widget line-finish _zsuggestion_menu_line_finish
+  add-zle-hook-widget line-pre-redraw _zsuggestion_menu_pre_redraw
+  preexec_functions=(_zsuggestion_preexec ${preexec_functions:#_zsuggestion_preexec})
+  precmd_functions=(_zsuggestion_precmd ${precmd_functions:#_zsuggestion_precmd})
 
-  if [[ -z "${widgets[_aster-native-self-insert]:-}" ]]; then
-    typeset -g _ASTER_PREVIOUS_TRIGGER="${$(bindkey '__ASTER_COMPLETION_KEY__')##* }"
-    [[ -z "$_ASTER_PREVIOUS_TRIGGER" || "$_ASTER_PREVIOUS_TRIGGER" == "undefined-key" ]] && \
-      _ASTER_PREVIOUS_TRIGGER=set-mark-command
-    typeset -g _ASTER_PREVIOUS_DOWN="${$(bindkey '^N')##* }"
-    typeset -g _ASTER_PREVIOUS_UP="${$(bindkey '^K')##* }"
-    typeset -g _ASTER_PREVIOUS_SHIFT_TAB="${$(bindkey '^[[Z')##* }"
-    typeset -g _ASTER_PREVIOUS_ESCAPE="${$(bindkey '^[')##* }"
-    typeset -g _ASTER_PREVIOUS_ENTER="${$(bindkey '^M')##* }"
-    typeset -g _ASTER_PREVIOUS_HISTORY_UP="${$(bindkey '^[[A')##* }"
-    typeset -g _ASTER_PREVIOUS_HISTORY_UP_APPLICATION="${$(bindkey '^[OA')##* }"
-    typeset -g _ASTER_PREVIOUS_HISTORY_DOWN="${$(bindkey '^[[B')##* }"
-    typeset -g _ASTER_PREVIOUS_HISTORY_DOWN_APPLICATION="${$(bindkey '^[OB')##* }"
-    [[ -z "$_ASTER_PREVIOUS_DOWN" || "$_ASTER_PREVIOUS_DOWN" == "undefined-key" ]] && \
-      _ASTER_PREVIOUS_DOWN=down-line-or-history
-    [[ -z "$_ASTER_PREVIOUS_UP" || "$_ASTER_PREVIOUS_UP" == "undefined-key" ]] && \
-      _ASTER_PREVIOUS_UP=kill-line
-    [[ -z "$_ASTER_PREVIOUS_SHIFT_TAB" || "$_ASTER_PREVIOUS_SHIFT_TAB" == "undefined-key" ]] && \
-      _ASTER_PREVIOUS_SHIFT_TAB=reverse-menu-complete
-    [[ -z "$_ASTER_PREVIOUS_ESCAPE" ]] && _ASTER_PREVIOUS_ESCAPE=undefined-key
-    [[ -z "$_ASTER_PREVIOUS_ENTER" || "$_ASTER_PREVIOUS_ENTER" == "undefined-key" ]] && \
-      _ASTER_PREVIOUS_ENTER=accept-line
-    [[ -z "$_ASTER_PREVIOUS_HISTORY_UP" || "$_ASTER_PREVIOUS_HISTORY_UP" == "undefined-key" ]] && \
-      _ASTER_PREVIOUS_HISTORY_UP=up-line-or-history
-    [[ -z "$_ASTER_PREVIOUS_HISTORY_UP_APPLICATION" ||
-       "$_ASTER_PREVIOUS_HISTORY_UP_APPLICATION" == "undefined-key" ]] && \
-      _ASTER_PREVIOUS_HISTORY_UP_APPLICATION=$_ASTER_PREVIOUS_HISTORY_UP
-    [[ -z "$_ASTER_PREVIOUS_HISTORY_DOWN" || "$_ASTER_PREVIOUS_HISTORY_DOWN" == "undefined-key" ]] && \
-      _ASTER_PREVIOUS_HISTORY_DOWN=down-line-or-history
-    [[ -z "$_ASTER_PREVIOUS_HISTORY_DOWN_APPLICATION" ||
-       "$_ASTER_PREVIOUS_HISTORY_DOWN_APPLICATION" == "undefined-key" ]] && \
-      _ASTER_PREVIOUS_HISTORY_DOWN_APPLICATION=$_ASTER_PREVIOUS_HISTORY_DOWN
-    zle -A "$_ASTER_PREVIOUS_TRIGGER" _aster-native-trigger
-    zle -A "$_ASTER_PREVIOUS_DOWN" _aster-native-down
-    zle -A "$_ASTER_PREVIOUS_UP" _aster-native-up
-    zle -A "$_ASTER_PREVIOUS_SHIFT_TAB" _aster-native-shift-tab
-    zle -A "$_ASTER_PREVIOUS_ESCAPE" _aster-native-escape
-    zle -A "$_ASTER_PREVIOUS_ENTER" _aster-native-enter
-    zle -A "$_ASTER_PREVIOUS_HISTORY_UP" _aster-native-history-up
-    zle -A "$_ASTER_PREVIOUS_HISTORY_UP_APPLICATION" _aster-native-history-up-application
-    zle -A "$_ASTER_PREVIOUS_HISTORY_DOWN" _aster-native-history-down
-    zle -A "$_ASTER_PREVIOUS_HISTORY_DOWN_APPLICATION" _aster-native-history-down-application
-    zle -A self-insert _aster-native-self-insert
-    typeset -g _ASTER_PREVIOUS_SPACE="${$(bindkey ' ')##* }"
-    [[ -z "$_ASTER_PREVIOUS_SPACE" || "$_ASTER_PREVIOUS_SPACE" == "undefined-key" ]] && \
-      _ASTER_PREVIOUS_SPACE=self-insert
-    zle -A "$_ASTER_PREVIOUS_SPACE" _aster-native-space
-    zle -A backward-delete-char _aster-native-backward-delete
-    zle -A bracketed-paste _aster-native-bracketed-paste
-    typeset -g _ASTER_PREVIOUS_INTERRUPT="${$(bindkey '^C')##* }"
-    [[ -z "$_ASTER_PREVIOUS_INTERRUPT" || "$_ASTER_PREVIOUS_INTERRUPT" == "undefined-key" ]] && \
-      _ASTER_PREVIOUS_INTERRUPT=send-break
-    zle -A "$_ASTER_PREVIOUS_INTERRUPT" _aster-native-interrupt
-    typeset -g _ASTER_PREVIOUS_TAB="${$(bindkey '^I')##* }"
-    [[ -z "$_ASTER_PREVIOUS_TAB" || "$_ASTER_PREVIOUS_TAB" == "undefined-key" ]] && \
-      _ASTER_PREVIOUS_TAB=expand-or-complete
-    zle -A "$_ASTER_PREVIOUS_TAB" _aster-native-tab
+  if [[ -z "${widgets[_zsuggestion-native-self-insert]:-}" ]]; then
+    typeset -g _ZSUGGESTION_PREVIOUS_TRIGGER="${$(bindkey '__ZSUGGESTION_COMPLETION_KEY__')##* }"
+    [[ -z "$_ZSUGGESTION_PREVIOUS_TRIGGER" || "$_ZSUGGESTION_PREVIOUS_TRIGGER" == "undefined-key" ]] && \
+      _ZSUGGESTION_PREVIOUS_TRIGGER=set-mark-command
+    typeset -g _ZSUGGESTION_PREVIOUS_DOWN="${$(bindkey '^N')##* }"
+    typeset -g _ZSUGGESTION_PREVIOUS_UP="${$(bindkey '^K')##* }"
+    typeset -g _ZSUGGESTION_PREVIOUS_SHIFT_TAB="${$(bindkey '^[[Z')##* }"
+    typeset -g _ZSUGGESTION_PREVIOUS_ESCAPE="${$(bindkey '^[')##* }"
+    typeset -g _ZSUGGESTION_PREVIOUS_ENTER="${$(bindkey '^M')##* }"
+    typeset -g _ZSUGGESTION_PREVIOUS_HISTORY_UP="${$(bindkey '^[[A')##* }"
+    typeset -g _ZSUGGESTION_PREVIOUS_HISTORY_UP_APPLICATION="${$(bindkey '^[OA')##* }"
+    typeset -g _ZSUGGESTION_PREVIOUS_HISTORY_DOWN="${$(bindkey '^[[B')##* }"
+    typeset -g _ZSUGGESTION_PREVIOUS_HISTORY_DOWN_APPLICATION="${$(bindkey '^[OB')##* }"
+    [[ -z "$_ZSUGGESTION_PREVIOUS_DOWN" || "$_ZSUGGESTION_PREVIOUS_DOWN" == "undefined-key" ]] && \
+      _ZSUGGESTION_PREVIOUS_DOWN=down-line-or-history
+    [[ -z "$_ZSUGGESTION_PREVIOUS_UP" || "$_ZSUGGESTION_PREVIOUS_UP" == "undefined-key" ]] && \
+      _ZSUGGESTION_PREVIOUS_UP=kill-line
+    [[ -z "$_ZSUGGESTION_PREVIOUS_SHIFT_TAB" || "$_ZSUGGESTION_PREVIOUS_SHIFT_TAB" == "undefined-key" ]] && \
+      _ZSUGGESTION_PREVIOUS_SHIFT_TAB=reverse-menu-complete
+    [[ -z "$_ZSUGGESTION_PREVIOUS_ESCAPE" ]] && _ZSUGGESTION_PREVIOUS_ESCAPE=undefined-key
+    [[ -z "$_ZSUGGESTION_PREVIOUS_ENTER" || "$_ZSUGGESTION_PREVIOUS_ENTER" == "undefined-key" ]] && \
+      _ZSUGGESTION_PREVIOUS_ENTER=accept-line
+    [[ -z "$_ZSUGGESTION_PREVIOUS_HISTORY_UP" || "$_ZSUGGESTION_PREVIOUS_HISTORY_UP" == "undefined-key" ]] && \
+      _ZSUGGESTION_PREVIOUS_HISTORY_UP=up-line-or-history
+    [[ -z "$_ZSUGGESTION_PREVIOUS_HISTORY_UP_APPLICATION" ||
+       "$_ZSUGGESTION_PREVIOUS_HISTORY_UP_APPLICATION" == "undefined-key" ]] && \
+      _ZSUGGESTION_PREVIOUS_HISTORY_UP_APPLICATION=$_ZSUGGESTION_PREVIOUS_HISTORY_UP
+    [[ -z "$_ZSUGGESTION_PREVIOUS_HISTORY_DOWN" || "$_ZSUGGESTION_PREVIOUS_HISTORY_DOWN" == "undefined-key" ]] && \
+      _ZSUGGESTION_PREVIOUS_HISTORY_DOWN=down-line-or-history
+    [[ -z "$_ZSUGGESTION_PREVIOUS_HISTORY_DOWN_APPLICATION" ||
+       "$_ZSUGGESTION_PREVIOUS_HISTORY_DOWN_APPLICATION" == "undefined-key" ]] && \
+      _ZSUGGESTION_PREVIOUS_HISTORY_DOWN_APPLICATION=$_ZSUGGESTION_PREVIOUS_HISTORY_DOWN
+    zle -A "$_ZSUGGESTION_PREVIOUS_TRIGGER" _zsuggestion-native-trigger
+    zle -A "$_ZSUGGESTION_PREVIOUS_DOWN" _zsuggestion-native-down
+    zle -A "$_ZSUGGESTION_PREVIOUS_UP" _zsuggestion-native-up
+    zle -A "$_ZSUGGESTION_PREVIOUS_SHIFT_TAB" _zsuggestion-native-shift-tab
+    zle -A "$_ZSUGGESTION_PREVIOUS_ESCAPE" _zsuggestion-native-escape
+    zle -A "$_ZSUGGESTION_PREVIOUS_ENTER" _zsuggestion-native-enter
+    zle -A "$_ZSUGGESTION_PREVIOUS_HISTORY_UP" _zsuggestion-native-history-up
+    zle -A "$_ZSUGGESTION_PREVIOUS_HISTORY_UP_APPLICATION" _zsuggestion-native-history-up-application
+    zle -A "$_ZSUGGESTION_PREVIOUS_HISTORY_DOWN" _zsuggestion-native-history-down
+    zle -A "$_ZSUGGESTION_PREVIOUS_HISTORY_DOWN_APPLICATION" _zsuggestion-native-history-down-application
+    zle -A self-insert _zsuggestion-native-self-insert
+    typeset -g _ZSUGGESTION_PREVIOUS_SPACE="${$(bindkey ' ')##* }"
+    [[ -z "$_ZSUGGESTION_PREVIOUS_SPACE" || "$_ZSUGGESTION_PREVIOUS_SPACE" == "undefined-key" ]] && \
+      _ZSUGGESTION_PREVIOUS_SPACE=self-insert
+    zle -A "$_ZSUGGESTION_PREVIOUS_SPACE" _zsuggestion-native-space
+    zle -A backward-delete-char _zsuggestion-native-backward-delete
+    zle -A bracketed-paste _zsuggestion-native-bracketed-paste
+    typeset -g _ZSUGGESTION_PREVIOUS_INTERRUPT="${$(bindkey '^C')##* }"
+    [[ -z "$_ZSUGGESTION_PREVIOUS_INTERRUPT" || "$_ZSUGGESTION_PREVIOUS_INTERRUPT" == "undefined-key" ]] && \
+      _ZSUGGESTION_PREVIOUS_INTERRUPT=send-break
+    zle -A "$_ZSUGGESTION_PREVIOUS_INTERRUPT" _zsuggestion-native-interrupt
+    typeset -g _ZSUGGESTION_PREVIOUS_TAB="${$(bindkey '^I')##* }"
+    [[ -z "$_ZSUGGESTION_PREVIOUS_TAB" || "$_ZSUGGESTION_PREVIOUS_TAB" == "undefined-key" ]] && \
+      _ZSUGGESTION_PREVIOUS_TAB=expand-or-complete
+    zle -A "$_ZSUGGESTION_PREVIOUS_TAB" _zsuggestion-native-tab
   fi
-  if [[ -z "${widgets[_aster-native-space]:-}" ]]; then
-    if [[ -z "${_ASTER_PREVIOUS_SPACE:-}" || "$_ASTER_PREVIOUS_SPACE" == aster-space ]]; then
-      typeset -g _ASTER_PREVIOUS_SPACE="${$(bindkey ' ')##* }"
-      if [[ -z "$_ASTER_PREVIOUS_SPACE" || "$_ASTER_PREVIOUS_SPACE" == "undefined-key" ||
-            "$_ASTER_PREVIOUS_SPACE" == aster-space ]]; then
+  if [[ -z "${widgets[_zsuggestion-native-space]:-}" ]]; then
+    if [[ -z "${_ZSUGGESTION_PREVIOUS_SPACE:-}" || "$_ZSUGGESTION_PREVIOUS_SPACE" == zsuggestion-space ]]; then
+      typeset -g _ZSUGGESTION_PREVIOUS_SPACE="${$(bindkey ' ')##* }"
+      if [[ -z "$_ZSUGGESTION_PREVIOUS_SPACE" || "$_ZSUGGESTION_PREVIOUS_SPACE" == "undefined-key" ||
+            "$_ZSUGGESTION_PREVIOUS_SPACE" == zsuggestion-space ]]; then
         if [[ -n "${widgets[magic-space]:-}" ]]; then
-          _ASTER_PREVIOUS_SPACE=magic-space
+          _ZSUGGESTION_PREVIOUS_SPACE=magic-space
         else
-          _ASTER_PREVIOUS_SPACE=self-insert
+          _ZSUGGESTION_PREVIOUS_SPACE=self-insert
         fi
       fi
     fi
-    zle -A "$_ASTER_PREVIOUS_SPACE" _aster-native-space
+    zle -A "$_ZSUGGESTION_PREVIOUS_SPACE" _zsuggestion-native-space
   fi
-  if [[ -z "${widgets[_aster-native-escape]:-}" ]]; then
-    if [[ -z "${_ASTER_PREVIOUS_ESCAPE:-}" || "$_ASTER_PREVIOUS_ESCAPE" == aster-escape ]]; then
-      typeset -g _ASTER_PREVIOUS_ESCAPE="${$(bindkey '^[')##* }"
-      [[ -z "$_ASTER_PREVIOUS_ESCAPE" || "$_ASTER_PREVIOUS_ESCAPE" == aster-escape ]] && \
-        _ASTER_PREVIOUS_ESCAPE=undefined-key
+  if [[ -z "${widgets[_zsuggestion-native-escape]:-}" ]]; then
+    if [[ -z "${_ZSUGGESTION_PREVIOUS_ESCAPE:-}" || "$_ZSUGGESTION_PREVIOUS_ESCAPE" == zsuggestion-escape ]]; then
+      typeset -g _ZSUGGESTION_PREVIOUS_ESCAPE="${$(bindkey '^[')##* }"
+      [[ -z "$_ZSUGGESTION_PREVIOUS_ESCAPE" || "$_ZSUGGESTION_PREVIOUS_ESCAPE" == zsuggestion-escape ]] && \
+        _ZSUGGESTION_PREVIOUS_ESCAPE=undefined-key
     fi
-    zle -A "$_ASTER_PREVIOUS_ESCAPE" _aster-native-escape
+    zle -A "$_ZSUGGESTION_PREVIOUS_ESCAPE" _zsuggestion-native-escape
   fi
-  if [[ -z "${widgets[_aster-native-interrupt]:-}" ]]; then
-    if [[ -z "${_ASTER_PREVIOUS_INTERRUPT:-}" || "$_ASTER_PREVIOUS_INTERRUPT" == aster-interrupt ]]; then
-      typeset -g _ASTER_PREVIOUS_INTERRUPT="${$(bindkey '^C')##* }"
-      [[ -z "$_ASTER_PREVIOUS_INTERRUPT" || "$_ASTER_PREVIOUS_INTERRUPT" == "undefined-key" ||
-            "$_ASTER_PREVIOUS_INTERRUPT" == aster-interrupt ]] && \
-        _ASTER_PREVIOUS_INTERRUPT=send-break
+  if [[ -z "${widgets[_zsuggestion-native-interrupt]:-}" ]]; then
+    if [[ -z "${_ZSUGGESTION_PREVIOUS_INTERRUPT:-}" || "$_ZSUGGESTION_PREVIOUS_INTERRUPT" == zsuggestion-interrupt ]]; then
+      typeset -g _ZSUGGESTION_PREVIOUS_INTERRUPT="${$(bindkey '^C')##* }"
+      [[ -z "$_ZSUGGESTION_PREVIOUS_INTERRUPT" || "$_ZSUGGESTION_PREVIOUS_INTERRUPT" == "undefined-key" ||
+            "$_ZSUGGESTION_PREVIOUS_INTERRUPT" == zsuggestion-interrupt ]] && \
+        _ZSUGGESTION_PREVIOUS_INTERRUPT=send-break
     fi
-    zle -A "$_ASTER_PREVIOUS_INTERRUPT" _aster-native-interrupt
+    zle -A "$_ZSUGGESTION_PREVIOUS_INTERRUPT" _zsuggestion-native-interrupt
   fi
-  if [[ -z "${widgets[_aster-native-enter]:-}" ]]; then
-    typeset -g _ASTER_PREVIOUS_ENTER="${$(bindkey '^M')##* }"
-    [[ -z "$_ASTER_PREVIOUS_ENTER" || "$_ASTER_PREVIOUS_ENTER" == "undefined-key" ||
-          "$_ASTER_PREVIOUS_ENTER" == aster-fuzzy-execute ]] && \
-      _ASTER_PREVIOUS_ENTER=accept-line
-    zle -A "$_ASTER_PREVIOUS_ENTER" _aster-native-enter
+  if [[ -z "${widgets[_zsuggestion-native-enter]:-}" ]]; then
+    typeset -g _ZSUGGESTION_PREVIOUS_ENTER="${$(bindkey '^M')##* }"
+    [[ -z "$_ZSUGGESTION_PREVIOUS_ENTER" || "$_ZSUGGESTION_PREVIOUS_ENTER" == "undefined-key" ||
+          "$_ZSUGGESTION_PREVIOUS_ENTER" == zsuggestion-fuzzy-execute ]] && \
+      _ZSUGGESTION_PREVIOUS_ENTER=accept-line
+    zle -A "$_ZSUGGESTION_PREVIOUS_ENTER" _zsuggestion-native-enter
   fi
-  zle -N aster-tab _aster_tab
-  bindkey '^I' aster-tab
-  zle -N aster-complete _aster_complete
-  zle -N aster-fuzzy-execute _aster_fuzzy_execute
-  zle -N aster-menu-down _aster_menu_down
-  zle -N aster-menu-up _aster_menu_up
-  zle -N aster-shift-tab _aster_shift_tab
-  zle -N aster-escape _aster_escape
-  zle -N aster-history-up _aster_history_up
-  zle -N aster-history-up-application _aster_history_up_application
-  zle -N aster-history-down _aster_history_down
-  zle -N aster-history-down-application _aster_history_down_application
-  zle -N aster-menu-ready _aster_menu_request_ready
-  zle -N aster-menu-apply _aster_menu_apply_result
-  zle -N aster-menu-tick _aster_menu_tick
-  zle -C aster-native-capture .complete-word _aster_native_capture_widget
-  zle -N self-insert _aster_self_insert
-  zle -N aster-space _aster_space
-  zle -N backward-delete-char _aster_backward_delete
-  zle -N bracketed-paste _aster_bracketed_paste
-  zle -N aster-interrupt _aster_interrupt
-  bindkey '__ASTER_COMPLETION_KEY__' aster-complete
-  bindkey '^N' aster-menu-down
-  bindkey '^K' aster-menu-up
-  bindkey '^[[Z' aster-shift-tab
-  bindkey '^[' aster-escape
-  bindkey '^[[A' aster-history-up
-  bindkey '^[OA' aster-history-up-application
-  bindkey '^[[B' aster-history-down
-  bindkey '^[OB' aster-history-down-application
-  bindkey '^C' aster-interrupt
-  bindkey ' ' aster-space
-  bindkey -N aster-fuzzy
-  bindkey -M aster-fuzzy -R ' '-'~' self-insert
-  bindkey -M aster-fuzzy ' ' aster-space
-  bindkey -M aster-fuzzy '^?' backward-delete-char
-  bindkey -M aster-fuzzy '^H' backward-delete-char
-  bindkey -M aster-fuzzy '^I' aster-tab
-  bindkey -M aster-fuzzy '^N' aster-menu-down
-  bindkey -M aster-fuzzy '^K' aster-menu-up
-  bindkey -M aster-fuzzy '^[[A' aster-menu-up
-  bindkey -M aster-fuzzy '^[OA' aster-menu-up
-  bindkey -M aster-fuzzy '^[[B' aster-menu-down
-  bindkey -M aster-fuzzy '^[OB' aster-menu-down
-  bindkey -M aster-fuzzy '__ASTER_COMPLETION_KEY__' aster-complete
-  bindkey -M aster-fuzzy '^M' aster-fuzzy-execute
-  bindkey -M aster-fuzzy '^C' aster-interrupt
-  bindkey -M aster-fuzzy '^[' aster-escape
+  zle -N zsuggestion-tab _zsuggestion_tab
+  bindkey '^I' zsuggestion-tab
+  zle -N zsuggestion-complete _zsuggestion_complete
+  zle -N zsuggestion-fuzzy-execute _zsuggestion_fuzzy_execute
+  zle -N zsuggestion-menu-down _zsuggestion_menu_down
+  zle -N zsuggestion-menu-up _zsuggestion_menu_up
+  zle -N zsuggestion-shift-tab _zsuggestion_shift_tab
+  zle -N zsuggestion-escape _zsuggestion_escape
+  zle -N zsuggestion-history-up _zsuggestion_history_up
+  zle -N zsuggestion-history-up-application _zsuggestion_history_up_application
+  zle -N zsuggestion-history-down _zsuggestion_history_down
+  zle -N zsuggestion-history-down-application _zsuggestion_history_down_application
+  zle -N zsuggestion-menu-ready _zsuggestion_menu_request_ready
+  zle -N zsuggestion-menu-apply _zsuggestion_menu_apply_result
+  zle -N zsuggestion-menu-tick _zsuggestion_menu_tick
+  zle -C zsuggestion-native-capture .complete-word _zsuggestion_native_capture_widget
+  zle -N self-insert _zsuggestion_self_insert
+  zle -N zsuggestion-space _zsuggestion_space
+  zle -N backward-delete-char _zsuggestion_backward_delete
+  zle -N bracketed-paste _zsuggestion_bracketed_paste
+  zle -N zsuggestion-interrupt _zsuggestion_interrupt
+  bindkey '__ZSUGGESTION_COMPLETION_KEY__' zsuggestion-complete
+  bindkey '^N' zsuggestion-menu-down
+  bindkey '^K' zsuggestion-menu-up
+  bindkey '^[[Z' zsuggestion-shift-tab
+  bindkey '^[' zsuggestion-escape
+  bindkey '^[[A' zsuggestion-history-up
+  bindkey '^[OA' zsuggestion-history-up-application
+  bindkey '^[[B' zsuggestion-history-down
+  bindkey '^[OB' zsuggestion-history-down-application
+  bindkey '^C' zsuggestion-interrupt
+  bindkey ' ' zsuggestion-space
+  bindkey -N zsuggestion-fuzzy
+  bindkey -M zsuggestion-fuzzy -R ' '-'~' self-insert
+  bindkey -M zsuggestion-fuzzy ' ' zsuggestion-space
+  bindkey -M zsuggestion-fuzzy '^?' backward-delete-char
+  bindkey -M zsuggestion-fuzzy '^H' backward-delete-char
+  bindkey -M zsuggestion-fuzzy '^I' zsuggestion-tab
+  bindkey -M zsuggestion-fuzzy '^N' zsuggestion-menu-down
+  bindkey -M zsuggestion-fuzzy '^K' zsuggestion-menu-up
+  bindkey -M zsuggestion-fuzzy '^[[A' zsuggestion-menu-up
+  bindkey -M zsuggestion-fuzzy '^[OA' zsuggestion-menu-up
+  bindkey -M zsuggestion-fuzzy '^[[B' zsuggestion-menu-down
+  bindkey -M zsuggestion-fuzzy '^[OB' zsuggestion-menu-down
+  bindkey -M zsuggestion-fuzzy '__ZSUGGESTION_COMPLETION_KEY__' zsuggestion-complete
+  bindkey -M zsuggestion-fuzzy '^M' zsuggestion-fuzzy-execute
+  bindkey -M zsuggestion-fuzzy '^C' zsuggestion-interrupt
+  bindkey -M zsuggestion-fuzzy '^[' zsuggestion-escape
 
   if [[ -n "${HISTFILE:-}" && -r "$HISTFILE" ]]; then
-    command aster import-history --file "${HISTFILE:A}" >/dev/null 2>&1 &!
+    command zsuggestion import-history --file "${HISTFILE:A}" >/dev/null 2>&1 &!
   fi
 fi
 "#
-    .replace("__ASTER_COMPLETION_KEY__", &completion_key)
-    .replace("__ASTER_COMPLETION_KEY_LABEL__", &completion_key_label)
-    .replace("__ASTER_UI_MENU_WIDTH__", &menu_width)
-    .replace("__ASTER_UI_MAX_VISIBLE__", &max_visible)
-    .replace("__ASTER_COMPLETION_MAX_CANDIDATES__", &max_candidates)
+    .replace("__ZSUGGESTION_COMPLETION_KEY__", &completion_key)
+    .replace("__ZSUGGESTION_COMPLETION_KEY_LABEL__", &completion_key_label)
+    .replace("__ZSUGGESTION_UI_MENU_WIDTH__", &menu_width)
+    .replace("__ZSUGGESTION_UI_MAX_VISIBLE__", &max_visible)
+    .replace("__ZSUGGESTION_COMPLETION_MAX_CANDIDATES__", &max_candidates)
     .replace(
-        "__ASTER_UI_PROMPT_OFFSET__",
+        "__ZSUGGESTION_UI_PROMPT_OFFSET__",
         &settings.ui.prompt_offset.to_string(),
     )
-    .replace("__ASTER_UI_BORDER__", &settings.ui.border)
-    .replace("__ASTER_UI_ACCENT__", &settings.ui.accent)
-    .replace("__ASTER_UI_TEXT__", &settings.ui.text)
-    .replace("__ASTER_UI_MUTED__", &settings.ui.muted)
-    .replace("__ASTER_UI_GHOST__", &settings.ui.ghost)
+    .replace("__ZSUGGESTION_UI_BORDER__", &settings.ui.border)
+    .replace("__ZSUGGESTION_UI_ACCENT__", &settings.ui.accent)
+    .replace("__ZSUGGESTION_UI_TEXT__", &settings.ui.text)
+    .replace("__ZSUGGESTION_UI_MUTED__", &settings.ui.muted)
+    .replace("__ZSUGGESTION_UI_GHOST__", &settings.ui.ghost)
     .replace(
-        "__ASTER_UI_SELECTED_BACKGROUND__",
+        "__ZSUGGESTION_UI_SELECTED_BACKGROUND__",
         &settings.ui.selected_background,
     )
-    .replace("__ASTER_UI_SELECTED_TEXT__", &settings.ui.selected_text)
+    .replace("__ZSUGGESTION_UI_SELECTED_TEXT__", &settings.ui.selected_text)
     .replace(
-        "__ASTER_UI_SELECTED_SOURCE__",
+        "__ZSUGGESTION_UI_SELECTED_SOURCE__",
         &settings.ui.selected_source,
     ))
 }
@@ -2488,29 +2461,29 @@ mod tests {
     fn zsh_integration_uses_configured_completion_key() {
         let mut settings = Settings::default();
         let integration = zsh_integration(&settings).unwrap();
-        assert!(integration.contains("bindkey '^@' aster-complete"));
+        assert!(integration.contains("bindkey '^@' zsuggestion-complete"));
         assert!(integration.contains("Ctrl-Space full"));
-        assert!(integration.contains("bindkey '^[[Z' aster-shift-tab"));
+        assert!(integration.contains("bindkey '^[[Z' zsuggestion-shift-tab"));
         assert!(integration.contains("--format zsh-v3"));
-        assert!(integration.contains("_ASTER_MENU_REFRESH_TICKS=5"));
-        assert!(integration.contains("zle -C aster-native-capture"));
+        assert!(integration.contains("_ZSUGGESTION_MENU_REFRESH_TICKS=5"));
+        assert!(integration.contains("zle -C zsuggestion-native-capture"));
         assert!(integration.contains("descriptions+=(\"Zsh completion\")"));
-        assert!(integration.contains("${(@)region_highlight:#*memo=aster*}"));
-        assert!(integration.contains("_ASTER_FOREIGN_HIGHLIGHTS"));
-        assert!(integration.contains("_ASTER_MENU_RESTORE_INDEX"));
-        assert!(!integration.contains("_ASTER_MENU_RESTORE_DISPLAY"));
+        assert!(integration.contains("${(@)region_highlight:#*memo=zsuggestion*}"));
+        assert!(integration.contains("_ZSUGGESTION_FOREIGN_HIGHLIGHTS"));
+        assert!(integration.contains("_ZSUGGESTION_MENU_RESTORE_INDEX"));
+        assert!(!integration.contains("_ZSUGGESTION_MENU_RESTORE_DISPLAY"));
         assert!(!integration.contains("select-pane"));
         assert!(!integration.contains("ASTER_TMUX_SHELL_TITLE"));
-        assert!(!integration.contains("aster-menu-enter"));
-        assert!(!integration.contains("bindkey '^M' aster"));
-        assert!(integration.contains("bindkey -M aster-fuzzy '^M' aster-fuzzy-execute"));
-        assert!(!integration.contains("__ASTER_COMPLETION_KEY__"));
-        assert!(!integration.contains("__ASTER_UI_"));
+        assert!(!integration.contains("zsuggestion-menu-enter"));
+        assert!(!integration.contains("bindkey '^M' zsuggestion"));
+        assert!(integration.contains("bindkey -M zsuggestion-fuzzy '^M' zsuggestion-fuzzy-execute"));
+        assert!(!integration.contains("__ZSUGGESTION_COMPLETION_KEY__"));
+        assert!(!integration.contains("__ZSUGGESTION_UI_"));
 
         settings.completion.key = "ctrl-x".to_owned();
         settings.ui.selected_background = "#3a3228".to_owned();
         let integration = zsh_integration(&settings).unwrap();
-        assert!(integration.contains("bindkey '^X' aster-complete"));
+        assert!(integration.contains("bindkey '^X' zsuggestion-complete"));
         assert!(integration.contains("bg=#3a3228"));
     }
 }

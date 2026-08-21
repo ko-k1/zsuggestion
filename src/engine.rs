@@ -41,61 +41,12 @@ pub fn complete(
     let limit = requested_limit
         .unwrap_or(settings.completion.max_candidates)
         .min(settings.completion.max_candidates);
-    let history =
-        store.history_candidates(buffer, cwd, limit, settings.history.successful_first)?;
 
-    let mut candidates: Vec<_> = history
-        .into_iter()
-        .filter_map(|history| {
-            let command = history.command;
-            let suffix = command.strip_prefix(buffer)?;
-            if suffix.is_empty() {
-                return None;
-            }
-            let insert_text = suffix.to_owned();
-            let accept_text = match settings.completion.accept {
-                AcceptMode::Segment => next_segment(suffix),
-                AcceptMode::Full => insert_text.clone(),
-            };
-            Some(Candidate {
-                display: sanitize_display(&command),
-                description: history_description(history.uses, history.same_cwd),
-                description_pending: false,
-                kind: CandidateKind::History,
-                insert_text,
-                accept_text,
-                source: CandidateSource::History,
-            })
-        })
-        .collect();
-
-    if candidates.len() < limit && valid_command_prefix(buffer) {
-        let remaining = limit - candidates.len();
-        let command_candidates: Vec<_> = commands
-            .matching(buffer, limit)
-            .into_iter()
-            .filter(|entry| {
-                !candidates
-                    .iter()
-                    .any(|candidate| candidate.display == entry.name)
-            })
-            .take(remaining)
-            .map(|entry| {
-                let suffix = entry.name.strip_prefix(buffer).unwrap_or_default();
-                let insertion = if suffix.is_empty() { " " } else { suffix };
-                Candidate {
-                    display: entry.name.clone(),
-                    description: entry.description.clone(),
-                    description_pending: entry.description_pending,
-                    kind: CandidateKind::Command,
-                    insert_text: insertion.to_owned(),
-                    accept_text: insertion.to_owned(),
-                    source: CandidateSource::Command,
-                }
-            })
-            .collect();
-        candidates.extend(command_candidates);
-    }
+    // Command suggestions outrank personal history. Structured option,
+    // subcommand, and value completions are the most specific command
+    // suggestions, followed by the installed-command inventory; recorded
+    // history only fills the capacity they leave unused.
+    let mut candidates: Vec<Candidate> = Vec::new();
 
     let mut enrichment_pending = false;
     let help_candidates = if let Some((command, option, prefix)) = value_context(buffer) {
@@ -176,17 +127,74 @@ pub fn complete(
         Vec::new()
     };
     if !help_candidates.is_empty() {
-        let mut help_candidates: Vec<_> = help_candidates
+        let help_slots = help_candidates.len().min((limit / 2).max(1));
+        candidates.extend(help_candidates.into_iter().take(help_slots));
+    }
+
+    if candidates.len() < limit && valid_command_prefix(buffer) {
+        let remaining = limit - candidates.len();
+        let command_candidates: Vec<_> = commands
+            .matching(buffer, limit)
             .into_iter()
             .filter(|entry| {
                 !candidates
                     .iter()
-                    .any(|candidate| candidate.display == entry.display)
+                    .any(|candidate| candidate.display == entry.name)
+            })
+            .take(remaining)
+            .map(|entry| {
+                let suffix = entry.name.strip_prefix(buffer).unwrap_or_default();
+                let insertion = if suffix.is_empty() { " " } else { suffix };
+                Candidate {
+                    display: entry.name.clone(),
+                    description: entry.description.clone(),
+                    description_pending: entry.description_pending,
+                    kind: CandidateKind::Command,
+                    insert_text: insertion.to_owned(),
+                    accept_text: insertion.to_owned(),
+                    source: CandidateSource::Command,
+                }
             })
             .collect();
-        let help_slots = help_candidates.len().min((limit / 2).max(1));
-        candidates.truncate(limit.saturating_sub(help_slots));
-        candidates.extend(help_candidates.drain(..help_slots));
+        candidates.extend(command_candidates);
+    }
+
+    if candidates.len() < limit {
+        let remaining = limit - candidates.len();
+        let history =
+            store.history_candidates(buffer, cwd, remaining, settings.history.successful_first)?;
+        for history in history {
+            let Some(suffix) = history.command.strip_prefix(buffer) else {
+                continue;
+            };
+            if suffix.is_empty() {
+                continue;
+            }
+            let display = sanitize_display(&history.command);
+            if candidates
+                .iter()
+                .any(|candidate| candidate.display == display)
+            {
+                continue;
+            }
+            let insert_text = suffix.to_owned();
+            let accept_text = match settings.completion.accept {
+                AcceptMode::Segment => next_segment(suffix),
+                AcceptMode::Full => insert_text.clone(),
+            };
+            candidates.push(Candidate {
+                display,
+                description: history_description(history.uses, history.same_cwd),
+                description_pending: false,
+                kind: CandidateKind::History,
+                insert_text,
+                accept_text,
+                source: CandidateSource::History,
+            });
+            if candidates.len() == limit {
+                break;
+            }
+        }
     }
 
     Ok(CompletionResponse {
@@ -361,6 +369,7 @@ pub fn merge_filesystem_candidates(
     let history_count = response
         .candidates
         .iter()
+        .rev()
         .take_while(|candidate| candidate.source == CandidateSource::History)
         .count();
     let path_slots = paths.len().min((limit / 2).max(1));
@@ -369,34 +378,25 @@ pub fn merge_filesystem_candidates(
     {
         first.description.push_str(" (more matches)");
     }
-    let history_keep = history_count.min(limit.saturating_sub(path_slots));
     let mut original = std::mem::take(&mut response.candidates);
-    let trailing = original.split_off(history_count);
-    let history = original;
+    let split_at = original.len() - history_count;
+    let history = original.split_off(split_at);
     let mut seen = HashSet::new();
-    for candidate in history.into_iter().take(history_keep) {
-        if response.candidates.len() >= limit {
+    let pre_path_keep = limit.saturating_sub(path_slots);
+    for candidate in original.into_iter().chain(history) {
+        if response.candidates.len() >= pre_path_keep {
             break;
         }
         if seen.insert(candidate.display.clone()) {
             response.candidates.push(candidate);
         }
     }
-    let path_limit = response.candidates.len().saturating_add(path_slots);
     for path in paths {
-        if response.candidates.len() >= path_limit || response.candidates.len() >= limit {
+        if response.candidates.len() >= limit {
             break;
         }
         if seen.insert(path.display.clone()) {
             response.candidates.push(path);
-        }
-    }
-    for candidate in trailing {
-        if response.candidates.len() >= limit {
-            break;
-        }
-        if seen.insert(candidate.display.clone()) {
-            response.candidates.push(candidate);
         }
     }
 }
@@ -709,7 +709,7 @@ mod tests {
 
     #[test]
     fn accepts_one_path_segment() {
-        assert_eq!(next_segment("ev/gitrepos/aster"), "ev/");
+        assert_eq!(next_segment("ev/gitrepos/zsuggestion"), "ev/");
     }
 
     #[test]
@@ -834,19 +834,19 @@ mod tests {
     }
 
     #[test]
-    fn history_stays_first_while_filesystem_candidates_reserve_capacity() {
+    fn filesystem_reserves_capacity_behind_command_suggestions() {
         let mut response = CompletionResponse {
             replace_start_byte: 5,
             replace_end_byte: 5,
             candidates: (0..4)
                 .map(|index| Candidate {
-                    display: format!("cmd history-{index}"),
+                    display: format!("cmd entry-{index}"),
                     description: String::new(),
                     description_pending: false,
-                    kind: CandidateKind::History,
+                    kind: CandidateKind::Command,
                     insert_text: index.to_string(),
                     accept_text: index.to_string(),
-                    source: CandidateSource::History,
+                    source: CandidateSource::Command,
                 })
                 .collect(),
             enrichment_pending: false,
@@ -864,12 +864,21 @@ mod tests {
             .collect();
         merge_filesystem_candidates(&mut response, paths, 4);
         assert_eq!(response.candidates.len(), 4);
-        assert_eq!(response.candidates[0].source, CandidateSource::History);
+        assert_eq!(response.candidates[0].source, CandidateSource::Command);
         assert_eq!(
             response
                 .candidates
                 .iter()
                 .filter(|candidate| candidate.source == CandidateSource::Filesystem)
+                .count(),
+            2
+        );
+        assert_eq!(
+            response
+                .candidates
+                .iter()
+                .take(2)
+                .filter(|candidate| candidate.source == CandidateSource::Command)
                 .count(),
             2
         );
@@ -1043,7 +1052,7 @@ mod tests {
         let mut settings = Settings::default();
         settings.completion.accept = AcceptMode::Segment;
         store
-            .record("cd ~/dev/gitrepos/aster", "/repo", 0, 100, "test", true)
+            .record("cd ~/dev/gitrepos/zsuggestion", "/repo", 0, 100, "test", true)
             .unwrap();
 
         let completion = complete(
@@ -1058,7 +1067,7 @@ mod tests {
         .unwrap();
 
         assert_eq!(completion.candidates.len(), 1);
-        assert_eq!(completion.candidates[0].insert_text, "ev/gitrepos/aster");
+        assert_eq!(completion.candidates[0].insert_text, "ev/gitrepos/zsuggestion");
         assert_eq!(completion.candidates[0].accept_text, "ev/");
         assert_eq!(completion.candidates[0].description, "used here");
 
@@ -1072,7 +1081,7 @@ mod tests {
             &Settings::default(),
         )
         .unwrap();
-        assert_eq!(completion.candidates[0].accept_text, "ev/gitrepos/aster");
+        assert_eq!(completion.candidates[0].accept_text, "ev/gitrepos/zsuggestion");
     }
 
     #[test]
@@ -1137,7 +1146,7 @@ mod tests {
     }
 
     #[test]
-    fn history_precedes_command_inventory() {
+    fn command_inventory_precedes_history() {
         let store = Store::in_memory().unwrap();
         store
             .record("git status", "/repo", 0, 100, "test", true)
@@ -1158,12 +1167,12 @@ mod tests {
         )
         .unwrap();
 
-        assert_eq!(completion.candidates[0].source, CandidateSource::History);
-        assert_eq!(completion.candidates[1].source, CandidateSource::Command);
+        assert_eq!(completion.candidates[0].source, CandidateSource::Command);
+        assert_eq!(completion.candidates[1].source, CandidateSource::History);
     }
 
     #[test]
-    fn history_deduplicates_command_inventory() {
+    fn command_inventory_deduplicates_history() {
         let store = Store::in_memory().unwrap();
         store
             .record("atlas", "/repo", 0, 100, "test", true)
@@ -1191,8 +1200,9 @@ mod tests {
         .unwrap();
 
         assert_eq!(completion.candidates.len(), 2);
-        assert_eq!(completion.candidates[0].display, "atlas");
-        assert_eq!(completion.candidates[0].source, CandidateSource::History);
-        assert_eq!(completion.candidates[1].display, "atlantis");
+        assert_eq!(completion.candidates[0].display, "atlantis");
+        assert_eq!(completion.candidates[0].source, CandidateSource::Command);
+        assert_eq!(completion.candidates[1].display, "atlas");
+        assert_eq!(completion.candidates[1].source, CandidateSource::Command);
     }
 }

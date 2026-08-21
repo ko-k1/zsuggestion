@@ -1,22 +1,22 @@
 [package]
-name = "aster-completion"
+name = "zsuggestion"
 version = "0.3.0"
 edition = "2024"
 rust-version = "1.88"
-description = "Natural shell completion"
-repository = "https://github.com/yawnbo/aster"
-homepage = "https://github.com/yawnbo/aster"
+description = "Nvim-style shell suggestion popup for Zsh"
+repository = "https://github.com/ko-k1/zsuggestion"
+homepage = "https://github.com/ko-k1/zsuggestion"
 license = "MIT"
 readme = "README.md"
-keywords = ["shell", "completion", "zsh", "fzf", "history"]
+keywords = ["shell", "completion", "zsh", "suggestions", "popup"]
 categories = ["command-line-utilities"]
 
 [lib]
-name = "aster"
+name = "zsuggestion"
 path = "src/lib.rs"
 
 [[bin]]
-name = "aster"
+name = "zsuggestion"
 path = "src/main.rs"
 
 [dependencies]

@@ -93,7 +93,7 @@ fn replace_previous_daemon(paths: &Paths) -> Result<()> {
         }
         thread::sleep(Duration::from_millis(20));
     }
-    bail!("previous Aster daemon did not release its socket and lock")
+    bail!("previous zsuggestion daemon did not release its socket and lock")
 }
 
 fn daemon_lock_is_available(paths: &Paths) -> bool {
@@ -115,7 +115,7 @@ fn daemon_lock_is_available(paths: &Paths) -> bool {
 
 fn start_daemon(paths: &Paths) -> Result<()> {
     paths.ensure_directories()?;
-    let executable = std::env::current_exe().context("failed to locate aster executable")?;
+    let executable = std::env::current_exe().context("failed to locate zsuggestion executable")?;
     let log = OpenOptions::new()
         .create(true)
         .append(true)
@@ -126,9 +126,9 @@ fn start_daemon(paths: &Paths) -> Result<()> {
     command
         .arg("daemon")
         .current_dir(&paths.state_dir)
-        .env("ASTER_CONFIG", &paths.config_file)
-        .env("ASTER_STATE_DIR", &paths.state_dir)
-        .env("ASTER_SOCKET", &paths.socket_file)
+        .env("ZSUGGESTION_CONFIG", &paths.config_file)
+        .env("ZSUGGESTION_STATE_DIR", &paths.state_dir)
+        .env("ZSUGGESTION_SOCKET", &paths.socket_file)
         .stdin(Stdio::null())
         .stdout(Stdio::from(log))
         .stderr(Stdio::from(error_log));
@@ -143,7 +143,7 @@ fn start_daemon(paths: &Paths) -> Result<()> {
             Ok(())
         });
     }
-    command.spawn().context("failed to start aster daemon")?;
+    command.spawn().context("failed to start zsuggestion daemon")?;
     Ok(())
 }
 
@@ -156,7 +156,7 @@ fn wait_for_daemon(paths: &Paths) -> Result<()> {
         thread::sleep(Duration::from_millis(20));
     }
     bail!(
-        "aster daemon did not become ready at {}",
+        "zsuggestion daemon did not become ready at {}",
         paths.socket_file.display()
     )
 }

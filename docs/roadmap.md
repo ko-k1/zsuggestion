@@ -42,7 +42,7 @@
 - Optional project-aware vocabulary provider.
 
 Filesystem candidates are the conservative default at argument positions.
-Other dynamic providers must be selected by a known argument type; Aster should
+Other dynamic providers must be selected by a known argument type; zsuggestion should
 abstain when it cannot justify the candidate kind.
 
 ## Non-Goals
@@ -51,6 +51,6 @@ abstain when it cannot justify the candidate kind.
 - Executing a suggestion automatically.
 - Persisting command output or environment values.
 - Requiring users to source completion code for every binary.
-- Replacing native shell completion when Aster has no high-confidence result.
+- Replacing native shell completion when zsuggestion has no high-confidence result.
 - Add PTY-owned Kitty image previews with explicit capability negotiation,
   image-ID cleanup, tmux passthrough, and sandboxed first-page PDF rasterization.

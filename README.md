@@ -1,7 +1,7 @@
-# Aster
+# zsuggestion
 
-Aster is a natural, history-first shell completion system. It would rather
-show nothing than offer a completion it cannot justify.
+zsuggestion is a natural shell completion system that puts command suggestions
+first. It would rather show nothing than offer a completion it cannot justify.
 
 The project is in early development. The current vertical slice provides a
 shared local daemon, SQLite-backed command history, Zsh history import, and
@@ -10,7 +10,8 @@ native Zsh candidates, full acceptance, and segment-by-segment Tab completion.
 
 ## Principles
 
-- Completed command history is the highest-priority source.
+- Suggestions for installed commands outrank everything else; recorded history
+  refines the menu instead of dominating it.
 - Candidate providers are ordered tiers; lower tiers fill unused menu capacity
   but never outrank higher-confidence results.
 - The menu appears while typing and highlights the highest-ranked candidate.
@@ -27,13 +28,13 @@ cargo build --release
 cargo install --path .
 ```
 
-Or install the published package while keeping the executable name `aster`:
+Or install the published package:
 
 ```sh
-cargo install aster-completion
+cargo install zsuggestion
 ```
 
-Aster currently targets Unix systems because its shared transport is an
+zsuggestion currently targets Unix systems because its shared transport is an
 owner-private Unix socket. Inline fuzzy mode requires `fzf` on the host.
 
 ## Zsh Setup
@@ -41,11 +42,11 @@ owner-private Unix socket. Inline fuzzy mode requires `fzf` on the host.
 Add one integration line to `.zshrc`:
 
 ```zsh
-eval "$(aster init zsh)"
+eval "$(zsuggestion init zsh)"
 ```
 
-This is Aster's only shell integration. You do not need to source completion
-scripts for every installed program.
+This is zsuggestion's only shell integration. You do not need to source
+completion scripts for every installed program.
 
 The integration:
 
@@ -53,9 +54,9 @@ The integration:
   the previous import.
 - Records submitted foreground commands and the shell status reported afterward.
 - Starts the per-host daemon automatically.
-- Uses Tab to accept the shortest next word or path segment from an open Aster
-  suggestion; each accepted segment resets the refreshed menu to row 1. With no
-  open suggestion, Tab delegates to the previous Zsh widget.
+- Uses Tab to accept the shortest next word or path segment from an open
+  zsuggestion menu; each accepted segment resets the refreshed menu to row 1.
+  With no open suggestion, Tab delegates to the previous Zsh widget.
 - Uses Shift-Tab to move upward through suggestions without entering a modal
   editing state; letters and Backspace continue editing normally.
 - Consumes both consecutive trigger spaces to enter inline fuzzy mode over shared
@@ -64,10 +65,12 @@ The integration:
   each new prompt discard all fuzzy state.
 - Captures append-safe candidates from the configured Zsh completion system in
   a forked completion context after about 30-60 ms idle and blends them into
-  Aster's menu without blocking input.
+  the menu without blocking input.
 - Shows ranked candidates automatically as the command buffer changes.
-- Renders a bordered, color-highlighted menu and selected-candidate ghost text
-  as part of ZLE's multiline display. Long rows preserve the completion suffix,
+- Renders an nvim-style bordered completion menu: each row pairs its candidate
+  with a description and a kind badge (`Cmd`, `Hist`, `Native`, `File`, `Dir`,
+  `Opt`, `Sub`, `Value`), the selected row is highlighted, and the top border
+  carries a position counter. Long rows preserve the completion suffix,
   rendering as `… suggestion` when the typed command prefix would hide it.
 - Adds a lazy preview box at 100 columns or wider only when useful content is
   available. History-only and generic rows stay compact; command details reuse
@@ -75,12 +78,12 @@ The integration:
   are read through a bounded, sanitized background helper. Changing rows erases
   the previous preview immediately and stale async results are target-checked.
 - Previews simple `ls`, GNU `gls`, and `eza` suggestions asynchronously,
-  including `ls` aliases backed by `eza`. Aster passes a validated argv directly
-  without a shell, translates `eza` colors into ZLE-safe highlight spans,
-  disables icons and hyperlinks, caps output, and kills previews that exceed the
-  short deadline.
+  including `ls` aliases backed by `eza`. zsuggestion passes a validated argv
+  directly without a shell, translates `eza` colors into ZLE-safe highlight
+  spans, disables icons and hyperlinks, caps output, and kills previews that
+  exceed the short deadline.
 - Uses Ctrl-Space to accept the entire highlighted candidate and preserves its
-  previous binding as the fallback when Aster has no candidate.
+  previous binding as the fallback when zsuggestion has no candidate.
 - Uses Ctrl-N and Ctrl-K to move through an open menu and updates inline ghost
   text to preview the selected row; outside the menu their prior widgets remain
   active.
@@ -91,13 +94,17 @@ The integration:
 - Leaves tmux pane titles and automatic window naming entirely under tmux and
   the foreground application's control.
 
-Aster owns ZLE's suggestion display. Do not load a second autosuggestion plugin
-alongside it; competing `POSTDISPLAY` highlights can recolor or stale the menu.
+zsuggestion owns ZLE's suggestion display. Do not load a second autosuggestion
+plugin alongside it; competing `POSTDISPLAY` highlights can recolor or stale
+the menu.
 
-Native Zsh capture is asynchronous and best-effort. History remains first at
-every position; explicit filesystem matches follow it and remain stable while
-native results arrive. Duplicate displays are removed.
-At every argument position Aster offers bounded
+Candidates are ranked in tiers. Structured option, subcommand, and value
+completions parsed from command metadata come first, followed by the cached
+inventory of installed commands. Recorded history fills the capacity those
+command suggestions leave unused, explicit filesystem matches follow it and
+remain stable while native results arrive, and asynchronous native Zsh
+candidates close the menu. Duplicate displays are removed.
+At every argument position zsuggestion offers bounded
 local filesystem matches, so path completion does not depend on a
 command-specific completion function. Root-command flags parsed from man pages
 or sandboxed `--help` output appear lazily with their descriptions ahead of
@@ -110,8 +117,8 @@ file remains selectable with a following Tab, which appends a space.
 
 The same setup works inside tmux and on SSH hosts. Each remote host runs its own
 daemon and keeps its own local history; tmux panes on that host share it.
-Aster uses its Unicode UI when `locale charmap` reports UTF-8 and automatically
-falls back to ASCII borders and markers otherwise.
+zsuggestion uses its Unicode UI when `locale charmap` reports UTF-8 and
+automatically falls back to ASCII borders and markers otherwise.
 
 Image and PDF candidates currently show bounded metadata rather than graphics.
 Kitty image transmission needs terminal-owned image IDs and cleanup that ZLE's
@@ -122,7 +129,7 @@ Kitty image transmission needs terminal-owned image IDs and cleanup that ZLE's
 Given a history entry:
 
 ```text
-cd ~/dev/gitrepos/aster
+cd ~/dev/gitrepos/zsuggestion
 ```
 
 and the current buffer:
@@ -137,31 +144,31 @@ pressing Tab on the automatically highlighted candidate inserts only:
 ev/
 ```
 
-Aster then queries again from the new buffer. Pressing Ctrl-Space instead inserts
-the complete `ev/gitrepos/aster` remainder. Tab also recognizes structured shell
-values. For example, `ssh ali` completes to `ssh alice@` before accepting the
-host, while `scp zzu` can advance through `zzuser@`, `example.com:/`, and each
-remote path component separately. Assignments, comma-separated values, URLs,
-rsync's `host::module` syntax, quoting, escaping, and bracketed IPv6 hosts use the
-same conservative boundary scanner.
+zsuggestion then queries again from the new buffer. Pressing Ctrl-Space instead
+inserts the complete `ev/gitrepos/zsuggestion` remainder. Tab also recognizes
+structured shell values. For example, `ssh ali` completes to `ssh alice@` before
+accepting the host, while `scp zzu` can advance through `zzuser@`,
+`example.com:/`, and each remote path component separately. Assignments,
+comma-separated values, URLs, rsync's `host::module` syntax, quoting, escaping,
+and bracketed IPv6 hosts use the same conservative boundary scanner.
 
 ## Commands
 
 ```text
-aster daemon
-aster stop
-aster doctor
-aster init zsh
-aster import-history --file ~/.zsh_history
-aster record --command "git status" --cwd "$PWD" --exit-code 0
-aster complete --buffer "git st" --cursor 6 --cwd "$PWD"
+zsuggestion daemon
+zsuggestion stop
+zsuggestion doctor
+zsuggestion init zsh
+zsuggestion import-history --file ~/.zsh_history
+zsuggestion record --command "git status" --cwd "$PWD" --exit-code 0
+zsuggestion complete --buffer "git st" --cursor 6 --cwd "$PWD"
 ```
 
 Client commands automatically start the daemon if it is unavailable.
 
 ## Configuration
 
-The default configuration is written by `aster init zsh`:
+The default configuration is written by `zsuggestion init zsh`:
 
 ```toml
 [completion]
@@ -199,15 +206,15 @@ Paths can be overridden for testing or custom deployments:
 
 | Variable | Purpose |
 | :------- | :------ |
-| `ASTER_CONFIG` | Configuration file |
-| `ASTER_STATE_DIR` | SQLite database and daemon log directory |
-| `ASTER_SOCKET` | Unix socket path |
+| `ZSUGGESTION_CONFIG` | Configuration file |
+| `ZSUGGESTION_STATE_DIR` | SQLite database and daemon log directory |
+| `ZSUGGESTION_SOCKET` | Unix socket path |
 | `XDG_CONFIG_HOME` | Default config root |
 | `XDG_STATE_HOME` | Default state root |
 
-Run `aster doctor` to print the resolved paths and verify daemon connectivity.
-Custom state and socket paths must live beneath directories owned by the current
-user and inaccessible to group and other users.
+Run `zsuggestion doctor` to print the resolved paths and verify daemon
+connectivity. Custom state and socket paths must live beneath directories owned
+by the current user and inaccessible to group and other users.
 
 ## Status
 
@@ -228,20 +235,20 @@ Implemented:
 - Asynchronous native Zsh candidate capture for append-safe options,
   subcommands, paths, aliases, and other configured completion sources.
 - Prefix-only completion with conservative partial acceptance.
-- Cursor-anchored, scrolling ZLE menu with ghost text, descriptions, semantic
-  kinds, highlighted matches, position counter, and configurable key hints.
+- Cursor-anchored, scrolling ZLE menu with ghost text, descriptions, kind
+  badges, highlighted matches, position counter, and configurable key hints.
 - Debounced asynchronous completion requests that never block character input.
 - Zsh native-completion fallback.
 
 Description discovery never runs on the completion request path. An unresolved
 visible command keeps its origin fallback, is queued on a bounded worker pool,
-and is refreshed in the menu when metadata becomes ready. Aster checks the exact
-man page first. On macOS, it may then run `--help` through `sandbox-exec` with
-network and writes denied, an empty environment, bounded output, and a hard
-timeout. Direct executable probing is disabled on platforms without that
-sandbox. Cached misses expire after one day; descriptions expire after 30 days
-or immediately when the executable path, identity, size, mode, or timestamps
-change.
+and is refreshed in the menu when metadata becomes ready. zsuggestion checks
+the exact man page first. On macOS, it may then run `--help` through
+`sandbox-exec` with network and writes denied, an empty environment, bounded
+output, and a hard timeout. Direct executable probing is disabled on platforms
+without that sandbox. Cached misses expire after one day; descriptions expire
+after 30 days or immediately when the executable path, identity, size, mode, or
+timestamps change.
 
 Planned:
 

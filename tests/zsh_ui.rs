@@ -14,8 +14,8 @@ fn popup_preserves_highlights_and_shell_bindings() {
         return;
     }
 
-    let aster = Path::new(env!("CARGO_BIN_EXE_aster"));
-    let binary_directory = aster.parent().unwrap();
+    let binary = Path::new(env!("CARGO_BIN_EXE_zsuggestion"));
+    let binary_directory = binary.parent().unwrap();
     let temporary = tempdir().unwrap();
     let state = temporary.path().join("state");
     let zdotdir = temporary.path().join("zsh");
@@ -26,8 +26,8 @@ fn popup_preserves_highlights_and_shell_bindings() {
     fs::set_permissions(&state, fs::Permissions::from_mode(0o700)).unwrap();
     fs::set_permissions(&zdotdir, fs::Permissions::from_mode(0o700)).unwrap();
 
-    let config = temporary.path().join("aster.toml");
-    let socket = state.join("aster.sock");
+    let config = temporary.path().join("zsuggestion.toml");
+    let socket = state.join("zsuggestion.sock");
     let state_dump = temporary.path().join("zle-state");
     let sync_file = temporary.path().join("zle-sync");
     let escape_request = temporary.path().join("zle-escape");
@@ -63,26 +63,26 @@ autoload -Uz add-zle-hook-widget compinit
 compinit -u
 autoload -Uz bracketed-paste-magic
 zle -N bracketed-paste bracketed-paste-magic
-_aster_test_history_up() {{
+_zsuggestion_test_history_up() {{
   BUFFER=history-arrow-up
   CURSOR=${{#BUFFER}}
 }}
-_aster_test_history_down() {{
+_zsuggestion_test_history_down() {{
   BUFFER=history-arrow-down
   CURSOR=${{#BUFFER}}
 }}
-zle -N _aster_test_history_up
-zle -N _aster_test_history_down
-bindkey '^[[A' _aster_test_history_up
-bindkey '^[OA' _aster_test_history_up
-bindkey '^[[B' _aster_test_history_down
-bindkey '^[OB' _aster_test_history_down
-_aster_test_highlight() {{
+zle -N _zsuggestion_test_history_up
+zle -N _zsuggestion_test_history_down
+bindkey '^[[A' _zsuggestion_test_history_up
+bindkey '^[OA' _zsuggestion_test_history_up
+bindkey '^[[B' _zsuggestion_test_history_down
+bindkey '^[OB' _zsuggestion_test_history_down
+_zsuggestion_test_highlight() {{
   region_highlight=( "${{(@)region_highlight:#*memo=foreign-test*}}" )
   [[ -n "$BUFFER" ]] && region_highlight+=("0 ${{#BUFFER}} fg=green memo=foreign-test")
 }}
-add-zle-hook-widget line-pre-redraw _aster_test_highlight
-_aster_test_native() {{
+add-zle-hook-widget line-pre-redraw _zsuggestion_test_highlight
+_zsuggestion_test_native() {{
   sleep 0.12
   if (( CURRENT > 2 )); then
     compadd next-value
@@ -90,48 +90,48 @@ _aster_test_native() {{
     compadd native/path/file native/second/file native/third/file
   fi
 }}
-compdef _aster_test_native aster-native-fixture
-_aster_test_file() {{
+compdef _zsuggestion_test_native zsuggestion-native-fixture
+_zsuggestion_test_file() {{
   compadd {preview_file} {preview_file_two}
 }}
-compdef _aster_test_file aster-preview-fixture
-_aster_test_scp() {{
+compdef _zsuggestion_test_file zsuggestion-preview-fixture
+_zsuggestion_test_scp() {{
   if [[ "$PREFIX" == zz* ]]; then
     compadd 'zzuser@example.com:/srv/app/file'
   else
     compadd file-alpha file-beta
   fi
 }}
-compdef _aster_test_scp scp
-_aster_test_ssh() {{
+compdef _zsuggestion_test_scp scp
+_zsuggestion_test_ssh() {{
   compadd alice@example.com
 }}
-compdef _aster_test_ssh ssh
-_aster_test_long() {{
+compdef _zsuggestion_test_ssh ssh
+_zsuggestion_test_long() {{
   compadd visible-first-option visible-second-option
 }}
-compdef _aster_test_long aster-command-with-a-very-long-name
+compdef _zsuggestion_test_long zsuggestion-command-with-a-very-long-name
 alias ls=eza
-eval "$({aster} init zsh)"
-_aster_test_dump_state() {{
+eval "$({binary} init zsh)"
+_zsuggestion_test_dump_state() {{
   if [[ -e {escape_request} ]]; then
     command rm -f -- {escape_request}
-    _aster_escape
+    _zsuggestion_escape
   fi
-  print -r -- "$_ASTER_MENU_ACTIVE|${{#_ASTER_MENU_ACCEPTS}}|$_ASTER_MENU_BUFFER|$BUFFER|${{_ASTER_MENU_ACCEPTS[1]}}|$_ASTER_MENU_INDEX|${{_ASTER_MENU_DISPLAYS[$_ASTER_MENU_INDEX]}}|$_ASTER_FUZZY_ACTIVE|$_ASTER_FUZZY_BASE|$_ASTER_FUZZY_QUERY|$_ASTER_PREVIEW_FD|$_ASTER_PREVIEW_TICKS|$_ASTER_PREVIEW_PATH|${{(j:;:)_ASTER_PREVIEW_LINES}}|${{(j:;:)_ASTER_MENU_DISPLAYS}}|${{POSTDISPLAY%%$'\n'*}}|${{(j:;:)_ASTER_MENU_SOURCES}}" > {state_dump}
+  print -r -- "$_ZSUGGESTION_MENU_ACTIVE|${{#_ZSUGGESTION_MENU_ACCEPTS}}|$_ZSUGGESTION_MENU_BUFFER|$BUFFER|${{_ZSUGGESTION_MENU_ACCEPTS[1]}}|$_ZSUGGESTION_MENU_INDEX|${{_ZSUGGESTION_MENU_DISPLAYS[$_ZSUGGESTION_MENU_INDEX]}}|$_ZSUGGESTION_FUZZY_ACTIVE|$_ZSUGGESTION_FUZZY_BASE|$_ZSUGGESTION_FUZZY_QUERY|$_ZSUGGESTION_PREVIEW_FD|$_ZSUGGESTION_PREVIEW_TICKS|$_ZSUGGESTION_PREVIEW_PATH|${{(j:;:)_ZSUGGESTION_PREVIEW_LINES}}|${{(j:;:)_ZSUGGESTION_MENU_DISPLAYS}}|${{POSTDISPLAY%%$'\n'*}}|${{(j:;:)_ZSUGGESTION_MENU_SOURCES}}" > {state_dump}
 }}
-_aster_test_sync() {{
+_zsuggestion_test_sync() {{
   : > {sync_file}
 }}
-zle -N _aster_test_dump_state
-zle -N _aster_test_sync
-bindkey '^X^D' _aster_test_dump_state
-bindkey '^G' _aster_test_sync
-bindkey -M aster-fuzzy '^X^D' _aster_test_dump_state
-bindkey -M aster-fuzzy '^G' _aster_test_sync
+zle -N _zsuggestion_test_dump_state
+zle -N _zsuggestion_test_sync
+bindkey '^X^D' _zsuggestion_test_dump_state
+bindkey '^G' _zsuggestion_test_sync
+bindkey -M zsuggestion-fuzzy '^X^D' _zsuggestion_test_dump_state
+bindkey -M zsuggestion-fuzzy '^G' _zsuggestion_test_sync
 PROMPT='%# '
 "#,
-        aster = shell_quote(aster.to_str().unwrap()),
+        binary = shell_quote(binary.to_str().unwrap()),
         helper_bin = shell_quote(helper_bin.to_str().unwrap()),
         preview_file = shell_quote(preview_file.to_str().unwrap()),
         preview_file_two = shell_quote(preview_file_two.to_str().unwrap()),
@@ -141,7 +141,7 @@ PROMPT='%# '
     );
     fs::write(zdotdir.join(".zshrc"), zshrc).unwrap();
     let shell_environment = format!(
-        "PATH={} ZDOTDIR={} ASTER_CONFIG={} ASTER_STATE_DIR={} ASTER_SOCKET={}",
+        "PATH={} ZDOTDIR={} ZSUGGESTION_CONFIG={} ZSUGGESTION_STATE_DIR={} ZSUGGESTION_SOCKET={}",
         shell_quote(&path),
         shell_quote(zdotdir.to_str().unwrap()),
         shell_quote(config.to_str().unwrap()),
@@ -153,10 +153,10 @@ PROMPT='%# '
         .duration_since(UNIX_EPOCH)
         .unwrap()
         .as_nanos();
-    let server = format!("aster-ui-{}-{unique}", std::process::id());
+    let server = format!("zsuggestion-ui-{}-{unique}", std::process::id());
     let mut guard = ServerGuard {
         server: server.clone(),
-        aster: aster.to_owned(),
+        binary: binary.to_owned(),
         config: config.clone(),
         state: state.clone(),
         socket: socket.clone(),
@@ -218,10 +218,10 @@ PROMPT='%# '
     assert_eq!(
         String::from_utf8(pane_title.stdout).unwrap().trim(),
         "user-title",
-        "Aster overwrote a user-owned tmux pane title"
+        "zsuggestion overwrote a user-owned tmux pane title"
     );
     let status = Command::new("tmux")
-        .args(["-L", &server, "send-keys", "-l", "-t", "test:0.0", "aste"])
+        .args(["-L", &server, "send-keys", "-l", "-t", "test:0.0", "zsu"])
         .status()
         .unwrap();
     assert!(status.success(), "failed to type into isolated Zsh");
@@ -242,10 +242,10 @@ PROMPT='%# '
 
     assert!(
         capture.contains('╭'),
-        "Aster popup did not appear:\n{capture}"
+        "zsuggestion popup did not appear:\n{capture}"
     );
     assert!(
-        capture.contains("\u{1b}[32maste"),
+        capture.contains("\u{1b}[32mzsu"),
         "existing syntax highlight was lost after popup rendering:\n{capture:?}"
     );
 
@@ -259,13 +259,13 @@ PROMPT='%# '
     let mut accepted_capture = String::new();
     while Instant::now() < deadline {
         accepted_capture = capture_pane(&server, true);
-        if accepted_capture.contains("\u{1b}[32master") {
+        if accepted_capture.contains("\u{1b}[32mzsuggestion") {
             break;
         }
         thread::sleep(Duration::from_millis(50));
     }
     assert!(
-        accepted_capture.contains("\u{1b}[32master"),
+        accepted_capture.contains("\u{1b}[32mzsuggestion"),
         "accepted command was not fully highlighted:\n{accepted_capture:?}"
     );
 
@@ -300,8 +300,8 @@ PROMPT='%# '
         )
     });
     assert!(binding.contains(r#""^M" accept-line"#));
-    assert!(binding.contains(r#""^I" aster-tab"#));
-    assert!(binding.contains("aster-shift-tab"));
+    assert!(binding.contains(r#""^I" zsuggestion-tab"#));
+    assert!(binding.contains("zsuggestion-shift-tab"));
 
     Command::new("tmux")
         .args(["-L", &server, "send-keys", "-l", "-t", "test:0.0", "cd "])
@@ -345,7 +345,7 @@ PROMPT='%# '
         .unwrap();
     wait_for_zle(&server, &sync_file);
 
-    let status = Command::new(aster)
+    let status = Command::new(binary)
         .args([
             "record",
             "--command",
@@ -357,9 +357,9 @@ PROMPT='%# '
             "--session",
             "history-priority-test",
         ])
-        .env("ASTER_CONFIG", &config)
-        .env("ASTER_STATE_DIR", &state)
-        .env("ASTER_SOCKET", &socket)
+        .env("ZSUGGESTION_CONFIG", &config)
+        .env("ZSUGGESTION_STATE_DIR", &state)
+        .env("ZSUGGESTION_SOCKET", &socket)
         .status()
         .unwrap();
     assert!(status.success(), "failed to seed priority history");
@@ -387,7 +387,7 @@ PROMPT='%# '
 
     Command::new("tmux")
         .args(["-L", &server, "send-keys", "-l", "-t", "test:0.0"])
-        .arg("aster-command-with-a-very-long-name v")
+        .arg("zsuggestion-command-with-a-very-long-name v")
         .status()
         .unwrap();
     let deadline = Instant::now() + Duration::from_secs(4);
@@ -450,7 +450,7 @@ PROMPT='%# '
 
     Command::new("tmux")
         .args(["-L", &server, "send-keys", "-l", "-t", "test:0.0"])
-        .arg("aster-native-fixture na")
+        .arg("zsuggestion-native-fixture na")
         .status()
         .unwrap();
     let immediate_capture = capture_pane(&server, false);
@@ -462,13 +462,13 @@ PROMPT='%# '
     let mut native_capture = String::new();
     while Instant::now() < deadline {
         native_capture = capture_pane(&server, false);
-        if native_capture.contains("aster-native-fixture native/path/file") {
+        if native_capture.contains("zsuggestion-native-fixture native/path/file") {
             break;
         }
         thread::sleep(Duration::from_millis(50));
     }
     assert!(
-        native_capture.contains("aster-native-fixture native/path/file")
+        native_capture.contains("zsuggestion-native-fixture native/path/file")
             && native_capture.contains("Zsh completion"),
         "debounced native Zsh candidate was absent:\n{native_capture}"
     );
@@ -479,7 +479,7 @@ PROMPT='%# '
     let retained_capture = capture_pane(&server, false);
     assert!(
         retained_capture.contains('╭')
-            && retained_capture.contains("aster-native-fixture native/path/file"),
+            && retained_capture.contains("zsuggestion-native-fixture native/path/file"),
         "matching candidates flashed off while the next request was pending:\n{retained_capture}"
     );
     Command::new("tmux")
@@ -493,7 +493,7 @@ PROMPT='%# '
     dump_zle_state(&server);
     let shifted_state = fs::read_to_string(&state_dump).unwrap();
     assert!(
-        shifted_state.contains("|2|aster-native-fixture native/second/file"),
+        shifted_state.contains("|2|zsuggestion-native-fixture native/second/file"),
         "Shift-Tab did not select the next candidate: {shifted_state:?}"
     );
     let shifted_fields: Vec<_> = shifted_state.trim_end().split('|').collect();
@@ -509,7 +509,7 @@ PROMPT='%# '
     dump_zle_state(&server);
     let typed_state = fs::read_to_string(&state_dump).unwrap();
     assert!(
-        typed_state.contains("|aster-native-fixture nati|aster-native-fixture nati|"),
+        typed_state.contains("|zsuggestion-native-fixture nati|zsuggestion-native-fixture nati|"),
         "ordinary typing did not update the buffer after selection: {typed_state:?}"
     );
     Command::new("tmux")
@@ -519,13 +519,13 @@ PROMPT='%# '
     let deadline = Instant::now() + Duration::from_secs(4);
     while Instant::now() < deadline {
         native_capture = capture_pane(&server, false);
-        if native_capture.contains("aster-native-fixture native/path/file") {
+        if native_capture.contains("zsuggestion-native-fixture native/path/file") {
             break;
         }
         thread::sleep(Duration::from_millis(50));
     }
     assert!(
-        native_capture.contains("aster-native-fixture native/path/file"),
+        native_capture.contains("zsuggestion-native-fixture native/path/file"),
         "Backspace did not resume completion from the edited buffer:\n{native_capture}"
     );
     Command::new("tmux")
@@ -545,8 +545,8 @@ PROMPT='%# '
     let state_after_tab = fs::read_to_string(&state_dump).unwrap();
     assert!(
         state_after_tab
-            .contains("|aster-native-fixture native/|aster-native-fixture native/|path/file")
-            && state_after_tab.contains("|1|aster-native-fixture native/path/file"),
+            .contains("|zsuggestion-native-fixture native/|zsuggestion-native-fixture native/|path/file")
+            && state_after_tab.contains("|1|zsuggestion-native-fixture native/path/file"),
         "Tab did not accept the next path segment and reset selection; state was {state_after_tab:?}:\n{segment_capture}"
     );
     Command::new("tmux")
@@ -562,7 +562,7 @@ PROMPT='%# '
     let state_after_second_tab = fs::read_to_string(&state_dump).unwrap();
     assert!(
         state_after_second_tab
-            .contains("|aster-native-fixture native/path/|aster-native-fixture native/path/|file"),
+            .contains("|zsuggestion-native-fixture native/path/|zsuggestion-native-fixture native/path/|file"),
         "a repeated Tab did not accept the next path segment; state was {state_after_second_tab:?}:\n{second_segment_capture}"
     );
     Command::new("tmux")
@@ -657,7 +657,7 @@ PROMPT='%# '
     wait_for_zle(&server, &sync_file);
     Command::new("tmux")
         .args(["-L", &server, "send-keys", "-l", "-t", "test:0.0"])
-        .arg("aster-native-fixture na")
+        .arg("zsuggestion-native-fixture na")
         .status()
         .unwrap();
     Command::new("tmux")
@@ -699,7 +699,7 @@ PROMPT='%# '
     let scp_before_tab = fs::read_to_string(&state_dump).unwrap();
     assert!(
         scp_before_tab.contains(&format!("|{scp_path_prefix}|{scp_path_prefix}|")),
-        "Aster did not retain the scp path prefix: {scp_before_tab:?}"
+        "zsuggestion did not retain the scp path prefix: {scp_before_tab:?}"
     );
     Command::new("tmux")
         .args(["-L", &server, "send-keys", "-t", "test:0.0", "Tab"])
@@ -767,7 +767,7 @@ PROMPT='%# '
         .unwrap();
     wait_for_zle(&server, &sync_file);
     let source_command = format!(
-        "zle -D _aster-native-space; source {}",
+        "zle -D _zsuggestion-native-space; source {}",
         shell_quote(zdotdir.join(".zshrc").to_str().unwrap())
     );
     Command::new("tmux")
@@ -799,12 +799,12 @@ PROMPT='%# '
         thread::sleep(Duration::from_millis(20));
     }
     let rebound = fs::read_to_string(&rebound_file).unwrap();
-    assert!(rebound.contains(r#""^I" aster-tab"#));
-    assert!(rebound.contains("aster-shift-tab"));
-    assert!(rebound.contains(r#""^@" aster-complete"#));
+    assert!(rebound.contains(r#""^I" zsuggestion-tab"#));
+    assert!(rebound.contains("zsuggestion-shift-tab"));
+    assert!(rebound.contains(r#""^@" zsuggestion-complete"#));
 
     Command::new("tmux")
-        .args(["-L", &server, "send-keys", "-l", "-t", "test:0.0", "aste"])
+        .args(["-L", &server, "send-keys", "-l", "-t", "test:0.0", "zsu"])
         .status()
         .unwrap();
     let deadline = Instant::now() + Duration::from_secs(4);
@@ -818,14 +818,14 @@ PROMPT='%# '
     }
     assert!(
         reloaded_capture.contains('╭'),
-        "Aster did not restart its ticker after .zshrc was sourced:\n{reloaded_capture}"
+        "zsuggestion did not restart its ticker after .zshrc was sourced:\n{reloaded_capture}"
     );
 
     for command in [
         "echo fuzzy-history-target",
         "echo fuzzy-history-target-secondary",
     ] {
-        let status = Command::new(aster)
+        let status = Command::new(binary)
             .args([
                 "record",
                 "--command",
@@ -837,9 +837,9 @@ PROMPT='%# '
                 "--session",
                 "fuzzy-test",
             ])
-            .env("ASTER_CONFIG", &config)
-            .env("ASTER_STATE_DIR", &state)
-            .env("ASTER_SOCKET", &socket)
+            .env("ZSUGGESTION_CONFIG", &config)
+            .env("ZSUGGESTION_STATE_DIR", &state)
+            .env("ZSUGGESTION_SOCKET", &socket)
             .status()
             .unwrap();
         assert!(status.success(), "failed to seed fuzzy history");
@@ -848,7 +848,7 @@ PROMPT='%# '
         "print -r -- fuzzy-enter-executed > {}",
         shell_quote(fuzzy_execute_file.to_str().unwrap())
     );
-    let status = Command::new(aster)
+    let status = Command::new(binary)
         .args([
             "record",
             "--command",
@@ -860,14 +860,14 @@ PROMPT='%# '
             "--session",
             "fuzzy-execute-test",
         ])
-        .env("ASTER_CONFIG", &config)
-        .env("ASTER_STATE_DIR", &state)
-        .env("ASTER_SOCKET", &socket)
+        .env("ZSUGGESTION_CONFIG", &config)
+        .env("ZSUGGESTION_STATE_DIR", &state)
+        .env("ZSUGGESTION_SOCKET", &socket)
         .status()
         .unwrap();
     assert!(status.success(), "failed to seed fuzzy execution history");
     let ls_history = format!("ls {}", temporary.path().display());
-    let status = Command::new(aster)
+    let status = Command::new(binary)
         .args([
             "record",
             "--command",
@@ -879,9 +879,9 @@ PROMPT='%# '
             "--session",
             "preview-test",
         ])
-        .env("ASTER_CONFIG", &config)
-        .env("ASTER_STATE_DIR", &state)
-        .env("ASTER_SOCKET", &socket)
+        .env("ZSUGGESTION_CONFIG", &config)
+        .env("ZSUGGESTION_STATE_DIR", &state)
+        .env("ZSUGGESTION_SOCKET", &socket)
         .status()
         .unwrap();
     assert!(status.success(), "failed to seed ls preview history");
@@ -1143,7 +1143,7 @@ PROMPT='%# '
     let preview_prefix = preview_file.to_str().unwrap().strip_suffix("txt").unwrap();
     Command::new("tmux")
         .args(["-L", &server, "send-keys", "-l", "-t", "test:0.0"])
-        .arg(format!("aster-preview-fixture {preview_prefix}"))
+        .arg(format!("zsuggestion-preview-fixture {preview_prefix}"))
         .status()
         .unwrap();
     let deadline = Instant::now() + Duration::from_secs(5);
@@ -1228,7 +1228,7 @@ PROMPT='%# '
             "-l",
             "-t",
             "test:ascii.0",
-            "aste",
+            "zsu",
         ])
         .status()
         .unwrap();
@@ -1236,7 +1236,7 @@ PROMPT='%# '
     let mut ascii_capture = String::new();
     while Instant::now() < deadline {
         ascii_capture = capture_target(&server, "test:ascii.0", false);
-        if ascii_capture.contains("+-") && ascii_capture.contains("aster") {
+        if ascii_capture.contains("+-") && ascii_capture.contains("zsuggestion") {
             break;
         }
         thread::sleep(Duration::from_millis(50));
@@ -1249,13 +1249,13 @@ PROMPT='%# '
         !ascii_capture.contains("<e2>") && !ascii_capture.contains('╭'),
         "non-UTF-8 menu still contained Unicode rendering:\n{ascii_capture}"
     );
-    assert_eq!(cursor_x(&server, "test:ascii.0"), 6);
+    assert_eq!(cursor_x(&server, "test:ascii.0"), 5);
     Command::new("tmux")
         .args(["-L", &server, "send-keys", "-t", "test:ascii.0", "BSpace"])
         .status()
         .unwrap();
     thread::sleep(Duration::from_millis(50));
-    assert_eq!(cursor_x(&server, "test:ascii.0"), 5);
+    assert_eq!(cursor_x(&server, "test:ascii.0"), 4);
     Command::new("tmux")
         .args([
             "-L",
@@ -1271,7 +1271,12 @@ PROMPT='%# '
     thread::sleep(Duration::from_millis(20));
     let ascii_state = fs::read_to_string(&state_dump).unwrap();
     let ascii_fields: Vec<_> = ascii_state.trim_end().split('|').collect();
-    assert_eq!(ascii_fields[3], "ast");
+    assert_eq!(ascii_fields[3], "zs");
+    Command::new("tmux")
+        .args(["-L", &server, "send-keys", "-l", "-t", "test:ascii.0", "u"])
+        .status()
+        .unwrap();
+    thread::sleep(Duration::from_millis(150));
     Command::new("tmux")
         .args([
             "-L",
@@ -1293,7 +1298,7 @@ PROMPT='%# '
     thread::sleep(Duration::from_millis(100));
     let narrow_capture = capture_target(&server, "test:ascii.0", false);
     assert!(
-        narrow_capture.contains("aster") && !narrow_capture.contains("+-"),
+        narrow_capture.contains("zsuggestion") && !narrow_capture.contains("+-"),
         "narrow terminal did not retain a compact suggestion:\n{narrow_capture}"
     );
     assert_eq!(cursor_x(&server, "test:ascii.0"), 5);
@@ -1392,7 +1397,7 @@ fn shell_quote(value: &str) -> String {
 
 struct ServerGuard {
     server: String,
-    aster: std::path::PathBuf,
+    binary: std::path::PathBuf,
     config: std::path::PathBuf,
     state: std::path::PathBuf,
     socket: std::path::PathBuf,
@@ -1408,11 +1413,11 @@ impl Drop for ServerGuard {
                 .stderr(Stdio::null())
                 .status();
         }
-        let _ = Command::new(&self.aster)
+        let _ = Command::new(&self.binary)
             .arg("stop")
-            .env("ASTER_CONFIG", &self.config)
-            .env("ASTER_STATE_DIR", &self.state)
-            .env("ASTER_SOCKET", &self.socket)
+            .env("ZSUGGESTION_CONFIG", &self.config)
+            .env("ZSUGGESTION_STATE_DIR", &self.state)
+            .env("ZSUGGESTION_SOCKET", &self.socket)
             .stdout(Stdio::null())
             .stderr(Stdio::null())
             .status();

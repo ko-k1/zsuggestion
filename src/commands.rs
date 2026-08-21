@@ -499,7 +499,7 @@ fn start_workers(
         let cache = Arc::clone(&cache);
         let cache_file = cache_file.clone();
         let worker = thread::Builder::new()
-            .name(format!("aster-description-{index}"))
+            .name(format!("zsuggestion-description-{index}"))
             .spawn(move || description_worker(&receiver, &state, &cache_file, &cache));
         if worker.is_ok() {
             started += 1;
@@ -2103,8 +2103,16 @@ mod tests {
 
     #[test]
     fn description_process_has_a_hard_timeout() {
+        let Some(sleep) = ["sleep", "/bin/sleep"]
+            .into_iter()
+            .find(|name| Command::new(name).arg("--version").output().is_ok())
+            .map(str::to_owned)
+        else {
+            eprintln!("skipping timeout test because sleep is unavailable");
+            return;
+        };
         let directory = tempdir().unwrap();
-        let mut command = Command::new("/bin/sleep");
+        let mut command = Command::new(sleep);
         command.arg("2");
         let started = Instant::now();
 
