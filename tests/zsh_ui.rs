@@ -118,7 +118,7 @@ _zsuggestion_test_dump_state() {{
     command rm -f -- {escape_request}
     _zsuggestion_escape
   fi
-  print -r -- "$_ZSUGGESTION_MENU_ACTIVE|${{#_ZSUGGESTION_MENU_ACCEPTS}}|$_ZSUGGESTION_MENU_BUFFER|$BUFFER|${{_ZSUGGESTION_MENU_ACCEPTS[1]}}|$_ZSUGGESTION_MENU_INDEX|${{_ZSUGGESTION_MENU_DISPLAYS[$_ZSUGGESTION_MENU_INDEX]}}|$_ZSUGGESTION_FUZZY_ACTIVE|$_ZSUGGESTION_FUZZY_BASE|$_ZSUGGESTION_FUZZY_QUERY|$_ZSUGGESTION_PREVIEW_FD|$_ZSUGGESTION_PREVIEW_TICKS|$_ZSUGGESTION_PREVIEW_PATH|${{(j:;:)_ZSUGGESTION_PREVIEW_LINES}}|${{(j:;:)_ZSUGGESTION_MENU_DISPLAYS}}|${{POSTDISPLAY%%$'\n'*}}|${{(j:;:)_ZSUGGESTION_MENU_SOURCES}}|${{_ZSUGGESTION_ESCAPE_RAN:-unset}}|$WIDGET after $LASTWIDGET|$KEYTIMEOUT|${{#PENDING}}|$ZLE_STATE" > {state_dump}
+  print -r -- "$_ZSUGGESTION_MENU_ACTIVE|${{#_ZSUGGESTION_MENU_ACCEPTS}}|$_ZSUGGESTION_MENU_BUFFER|$BUFFER|${{_ZSUGGESTION_MENU_ACCEPTS[1]}}|$_ZSUGGESTION_MENU_INDEX|${{_ZSUGGESTION_MENU_DISPLAYS[$_ZSUGGESTION_MENU_INDEX]}}|$_ZSUGGESTION_FUZZY_ACTIVE|$_ZSUGGESTION_FUZZY_BASE|$_ZSUGGESTION_FUZZY_QUERY|$_ZSUGGESTION_PREVIEW_FD|$_ZSUGGESTION_PREVIEW_TICKS|$_ZSUGGESTION_PREVIEW_PATH|${{(j:;:)_ZSUGGESTION_PREVIEW_LINES}}|${{(j:;:)_ZSUGGESTION_MENU_DISPLAYS}}|${{POSTDISPLAY%%$'\n'*}}|${{(j:;:)_ZSUGGESTION_MENU_SOURCES}}" > {state_dump}
 }}
 _zsuggestion_test_sync() {{
   : > {sync_file}
@@ -345,16 +345,17 @@ PROMPT='%# '
         arrow_up_fields[5], "1",
         "Up did not move the popup selection back: {arrow_up_state:?}"
     );
-    Command::new("tmux")
-        .args(["-L", &server, "send-keys", "-t", "test:0.0", "Escape"])
-        .status()
-        .unwrap();
-    thread::sleep(Duration::from_millis(250));
-    wait_for_zle(&server, &sync_file);
+    fs::write(&escape_request, "").unwrap();
     dump_zle_state(&server);
-    eprintln!(
-        "CI-DEBUG post-escape: {:?}",
-        fs::read_to_string(&state_dump).unwrap()
+    let escaped_state = fs::read_to_string(&state_dump).unwrap();
+    let escaped_fields: Vec<_> = escaped_state.trim_end().split('|').collect();
+    assert_eq!(
+        escaped_fields[0], "0",
+        "escape did not dismiss the popup: {escaped_fields:?}"
+    );
+    assert_eq!(
+        escaped_fields[3], "cd ",
+        "escape changed the command buffer: {escaped_fields:?}"
     );
     Command::new("tmux")
         .args(["-L", &server, "send-keys", "-t", "test:0.0", "Up"])
@@ -363,7 +364,6 @@ PROMPT='%# '
     thread::sleep(Duration::from_millis(350));
     dump_zle_state(&server);
     let history_up_state = fs::read_to_string(&state_dump).unwrap();
-    eprintln!("CI-DEBUG post-history-up: {history_up_state:?}");
     let history_up_fields: Vec<_> = history_up_state.trim_end().split('|').collect();
     assert_eq!(history_up_fields[0], "0");
     assert_eq!(history_up_fields[3], "history-arrow-up");
