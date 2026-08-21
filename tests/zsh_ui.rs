@@ -234,14 +234,14 @@ PROMPT='%# '
             .output()
             .unwrap();
         capture = String::from_utf8(output.stdout).unwrap();
-        if capture.contains('╭') {
+        if capture.contains("Cmd") {
             break;
         }
         thread::sleep(Duration::from_millis(50));
     }
 
     assert!(
-        capture.contains('╭'),
+        capture.contains("Cmd"),
         "zsuggestion popup did not appear:\n{capture}"
     );
     assert!(
@@ -478,7 +478,7 @@ PROMPT='%# '
         .unwrap();
     let retained_capture = capture_pane(&server, false);
     assert!(
-        retained_capture.contains('╭')
+        retained_capture.contains("Native")
             && retained_capture.contains("zsuggestion-native-fixture native/path/file"),
         "matching candidates flashed off while the next request was pending:\n{retained_capture}"
     );
@@ -687,13 +687,13 @@ PROMPT='%# '
     let mut scp_capture = String::new();
     while Instant::now() < deadline {
         scp_capture = capture_pane(&server, false);
-        if scp_capture.contains("1/2") && scp_capture.matches("File").count() >= 2 {
+        if scp_capture.matches("File").count() >= 2 {
             break;
         }
         thread::sleep(Duration::from_millis(50));
     }
     assert!(
-        scp_capture.contains("1/2") && scp_capture.matches("File").count() >= 2,
+        scp_capture.matches("File").count() >= 2,
         "generic filesystem candidates were absent for scp:\n{scp_capture}"
     );
     dump_zle_state(&server);
@@ -812,13 +812,13 @@ PROMPT='%# '
     let mut reloaded_capture = String::new();
     while Instant::now() < deadline {
         reloaded_capture = capture_pane(&server, false);
-        if reloaded_capture.contains('╭') {
+        if reloaded_capture.contains("Cmd") {
             break;
         }
         thread::sleep(Duration::from_millis(50));
     }
     assert!(
-        reloaded_capture.contains('╭'),
+        reloaded_capture.contains("Cmd"),
         "zsuggestion did not restart its ticker after .zshrc was sourced:\n{reloaded_capture}"
     );
 
@@ -1237,13 +1237,13 @@ PROMPT='%# '
     let mut ascii_capture = String::new();
     while Instant::now() < deadline {
         ascii_capture = capture_target(&server, "test:ascii.0", false);
-        if ascii_capture.contains("+-") && ascii_capture.contains("zsuggestion") {
+        if ascii_capture.contains("Cmd") && ascii_capture.contains("zsuggestion") {
             break;
         }
         thread::sleep(Duration::from_millis(50));
     }
     assert!(
-        ascii_capture.contains("+-") && ascii_capture.contains("| > "),
+        ascii_capture.contains("Cmd") && ascii_capture.contains("> "),
         "ASCII fallback menu was absent:\n{ascii_capture}"
     );
     assert!(

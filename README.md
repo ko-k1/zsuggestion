@@ -67,11 +67,14 @@ The integration:
   a forked completion context after about 30-60 ms idle and blends them into
   the menu without blocking input.
 - Shows ranked candidates automatically as the command buffer changes.
-- Renders an nvim-style bordered completion menu: each row pairs its candidate
-  with a description and a kind badge (`Cmd`, `Hist`, `Native`, `File`, `Dir`,
-  `Opt`, `Sub`, `Value`), the selected row is highlighted, and the top border
-  carries a position counter. Long rows preserve the completion suffix,
-  rendering as `… suggestion` when the typed command prefix would hide it.
+- Renders an nvim-style completion popup without window chrome: every row pairs
+  its candidate with a dimmed description and a right-aligned kind badge
+  (`Cmd`, `Hist`, `Native`, `File`, `Dir`, `Opt`, `Sub`, `Value`), the selected
+  row carries a full-width background highlight, and a slim scrollbar
+  (`█` thumb over a muted `┆` track) appears on the right edge whenever
+  candidates exceed the visible window. Long rows preserve the completion
+  suffix, rendering as `… suggestion` when the typed command prefix would hide
+  it.
 - Adds a lazy preview box at 100 columns or wider only when useful content is
   available. History-only and generic rows stay compact; command details reuse
   the existing asynchronous description workers, and selected native text files
@@ -235,8 +238,8 @@ Implemented:
 - Asynchronous native Zsh candidate capture for append-safe options,
   subcommands, paths, aliases, and other configured completion sources.
 - Prefix-only completion with conservative partial acceptance.
-- Cursor-anchored, scrolling ZLE menu with ghost text, descriptions, kind
-  badges, highlighted matches, position counter, and configurable key hints.
+- Cursor-anchored, scrolling ZLE popup with ghost text, descriptions, kind
+  badges, highlighted matches, a position scrollbar, and configurable colors.
 - Debounced asynchronous completion requests that never block character input.
 - Zsh native-completion fallback.
 

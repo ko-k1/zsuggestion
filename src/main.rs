@@ -984,7 +984,7 @@ if [[ -o interactive ]] && (( $+commands[zsuggestion] )); then
   }
 
   _zsuggestion_menu_render() {
-    local index display description kind kind_label icon marker row top bottom fill ghost=""
+    local index display description kind kind_label icon marker row fill ghost=""
     local horizontal="─" vertical="│" top_left="╭" top_right="╮"
     local bottom_left="╰" bottom_right="╯" separator="·" ellipsis="…"
     local selected_marker="▶ " history_icon="↺" command_icon="❯" native_icon="⇥"
@@ -1111,19 +1111,19 @@ if [[ -o interactive ]] && (( $+commands[zsuggestion] )); then
     local description_width=24
     (( box_width < 64 )) && description_width=16
     local kind_width=6
-    local title_width=$(( box_width - description_width - 9 - kind_width - 1 ))
-    local top_prefix="${top_left}${horizontal}"
-    local count=" $_ZSUGGESTION_MENU_INDEX/$total "
-    printf -v fill '%*s' "$(( box_width - ${#top_prefix} - ${#count} - 1 ))" ""
-    fill="${fill// /$horizontal}"
-    top="${top_prefix}${fill}${count}${top_right}"
-    local footer=" S-Tab/K up ${separator} C-N down ${separator} Tab part ${separator} __ZSUGGESTION_COMPLETION_KEY_LABEL__ full "
-    (( _ZSUGGESTION_FUZZY_ACTIVE )) && \
-      footer=" Esc exit ${separator} C-K up ${separator} C-N down ${separator} Tab choose ${separator} Enter run "
-    local bottom_prefix="${bottom_left}${horizontal}${footer}"
-    printf -v fill '%*s' "$(( box_width - ${#bottom_prefix} - 1 ))" ""
-    fill="${fill// /$horizontal}"
-    bottom="${bottom_prefix}${fill}${bottom_right}"
+    local title_width=$(( box_width - description_width - kind_width - 8 ))
+    local thumb="█" track="┆"
+    if (( ! _ZSUGGESTION_UTF8_UI )); then
+      thumb='#'
+      track='|'
+    fi
+    local thumb_size=0 thumb_pos=0 scrollbar_char="$track"
+    if (( total > window_size )); then
+      thumb_size=$(( window_size * window_size / total ))
+      (( thumb_size < 1 )) && thumb_size=1
+      (( thumb_size > window_size )) && thumb_size=$window_size
+      thumb_pos=$(( (_ZSUGGESTION_MENU_START - 1) * (window_size - thumb_size) / (total - window_size) ))
+    fi
 
     local indent=$(( __ZSUGGESTION_UI_PROMPT_OFFSET__ + cursor_position ))
     local max_indent=$(( ${COLUMNS:-80} - box_width - 1 ))
@@ -1133,10 +1133,6 @@ if [[ -o interactive ]] && (( $+commands[zsuggestion] )); then
     printf -v padding '%*s' "$indent" ""
 
     _zsuggestion_preview_consider
-
-    local line_start=$(( ${#input} + ${#POSTDISPLAY} + 1 + indent ))
-    POSTDISPLAY+=$'\n'"${padding}${top}"
-    region_highlight+=("$line_start $(( line_start + ${#top} )) fg=__ZSUGGESTION_UI_BORDER__ memo=zsuggestion")
 
     for (( index = _ZSUGGESTION_MENU_START; index <= end; index++ )); do
       display="$_ZSUGGESTION_MENU_DISPLAYS[$index]"
@@ -1183,34 +1179,37 @@ if [[ -o interactive ]] && (( $+commands[zsuggestion] )); then
       esac
       marker="  "
       (( index == _ZSUGGESTION_MENU_INDEX )) && marker="$selected_marker"
-      printf -v row '%s %s%s %-*s %-*s %*s %s' \
-        "$vertical" "$marker" "$icon" "$title_width" "$display" \
-        "$description_width" "$description" "$kind_width" "$kind_label" "$vertical"
+      scrollbar_char="$track"
+      if (( thumb_size > 0 )); then
+        local row_offset=$(( index - _ZSUGGESTION_MENU_START ))
+        (( row_offset >= thumb_pos && row_offset < thumb_pos + thumb_size )) && scrollbar_char="$thumb"
+      fi
+      printf -v row '%s%s %-*s %-*s %*s %s' \
+        "$marker" "$icon" "$title_width" "$display" \
+        "$description_width" "$description" "$kind_width" "$kind_label" "$scrollbar_char"
 
       line_start=$(( ${#input} + ${#POSTDISPLAY} + 1 + indent ))
       POSTDISPLAY+=$'\n'"${padding}${row}"
       if (( index == _ZSUGGESTION_MENU_INDEX )); then
         region_highlight+=("$(( line_start + 1 )) $(( line_start + ${#row} - 1 )) bg=__ZSUGGESTION_UI_SELECTED_BACKGROUND__,fg=__ZSUGGESTION_UI_SELECTED_TEXT__ memo=zsuggestion")
-        region_highlight+=("$(( line_start + 2 )) $(( line_start + 3 )) bg=__ZSUGGESTION_UI_SELECTED_BACKGROUND__,fg=__ZSUGGESTION_UI_ACCENT__,bold memo=zsuggestion")
-        region_highlight+=("$(( line_start + 4 )) $(( line_start + 5 )) bg=__ZSUGGESTION_UI_SELECTED_BACKGROUND__,fg=__ZSUGGESTION_UI_ACCENT__ memo=zsuggestion")
+        region_highlight+=("$(( line_start + 1 )) $(( line_start + 3 )) bg=__ZSUGGESTION_UI_SELECTED_BACKGROUND__,fg=__ZSUGGESTION_UI_ACCENT__,bold memo=zsuggestion")
+        region_highlight+=("$(( line_start + 3 )) $(( line_start + 5 )) bg=__ZSUGGESTION_UI_SELECTED_BACKGROUND__,fg=__ZSUGGESTION_UI_ACCENT__ memo=zsuggestion")
       else
         region_highlight+=("$(( line_start + 1 )) $(( line_start + ${#row} - 1 )) fg=__ZSUGGESTION_UI_TEXT__ memo=zsuggestion")
-        region_highlight+=("$(( line_start + 4 )) $(( line_start + 5 )) fg=__ZSUGGESTION_UI_MUTED__ memo=zsuggestion")
+        region_highlight+=("$(( line_start + 1 )) $(( line_start + 5 )) fg=__ZSUGGESTION_UI_MUTED__ memo=zsuggestion")
       fi
-      region_highlight+=("$line_start $(( line_start + 1 )) fg=__ZSUGGESTION_UI_BORDER__ memo=zsuggestion")
-      region_highlight+=("$(( line_start + ${#row} - 1 )) $(( line_start + ${#row} )) fg=__ZSUGGESTION_UI_BORDER__ memo=zsuggestion")
 
       local match_length=0
       (( ! _ZSUGGESTION_FUZZY_ACTIVE && ! display_truncated )) && match_length=${#input}
       (( match_length > title_width )) && match_length=$title_width
       if (( match_length > 0 )); then
         if (( index == _ZSUGGESTION_MENU_INDEX )); then
-          region_highlight+=("$(( line_start + 6 )) $(( line_start + 6 + match_length )) bg=__ZSUGGESTION_UI_SELECTED_BACKGROUND__,fg=__ZSUGGESTION_UI_SELECTED_TEXT__,bold memo=zsuggestion")
+          region_highlight+=("$(( line_start + 5 )) $(( line_start + 5 + match_length )) bg=__ZSUGGESTION_UI_SELECTED_BACKGROUND__,fg=__ZSUGGESTION_UI_SELECTED_TEXT__,bold memo=zsuggestion")
         else
-          region_highlight+=("$(( line_start + 6 )) $(( line_start + 6 + match_length )) fg=__ZSUGGESTION_UI_SELECTED_TEXT__,bold memo=zsuggestion")
+          region_highlight+=("$(( line_start + 5 )) $(( line_start + 5 + match_length )) fg=__ZSUGGESTION_UI_SELECTED_TEXT__,bold memo=zsuggestion")
         fi
       fi
-      local description_start=$(( line_start + 6 + title_width + 1 ))
+      local description_start=$(( line_start + 6 + title_width ))
       if (( index == _ZSUGGESTION_MENU_INDEX )); then
         region_highlight+=("$description_start $(( description_start + description_width )) bg=__ZSUGGESTION_UI_SELECTED_BACKGROUND__,fg=__ZSUGGESTION_UI_SELECTED_SOURCE__ memo=zsuggestion")
       else
@@ -1222,11 +1221,27 @@ if [[ -o interactive ]] && (( $+commands[zsuggestion] )); then
       else
         region_highlight+=("$kind_start $(( kind_start + kind_width )) fg=__ZSUGGESTION_UI_MUTED__ memo=zsuggestion")
       fi
+      if (( index != _ZSUGGESTION_MENU_INDEX )); then
+        local scroll_start=$(( line_start + ${#row} - 1 ))
+        if [[ "$scrollbar_char" == "$thumb" ]]; then
+          region_highlight+=("$scroll_start $(( scroll_start + 1 )) fg=__ZSUGGESTION_UI_ACCENT__,bold memo=zsuggestion")
+        else
+          region_highlight+=("$scroll_start $(( scroll_start + 1 )) fg=__ZSUGGESTION_UI_MUTED__ memo=zsuggestion")
+        fi
+      fi
     done
 
-    line_start=$(( ${#input} + ${#POSTDISPLAY} + 1 + indent ))
-    POSTDISPLAY+=$'\n'"${padding}${bottom}"
-    region_highlight+=("$line_start $(( line_start + ${#bottom} )) fg=__ZSUGGESTION_UI_BORDER__ memo=zsuggestion")
+    if (( _ZSUGGESTION_FUZZY_ACTIVE )); then
+      local footer=" Esc exit ${separator} C-K up ${separator} C-N down ${separator} Tab choose ${separator} Enter run "
+      line_start=$(( ${#input} + ${#POSTDISPLAY} + 1 + indent ))
+      POSTDISPLAY+=$'\n'"${padding}${footer}"
+      region_highlight+=("$line_start $(( line_start + ${#footer} )) fg=__ZSUGGESTION_UI_MUTED__ memo=zsuggestion")
+    else
+      local footer=" Tab part ${separator} __ZSUGGESTION_COMPLETION_KEY_LABEL__ full "
+      line_start=$(( ${#input} + ${#POSTDISPLAY} + 1 + indent ))
+      POSTDISPLAY+=$'\n'"${padding}${footer}"
+      region_highlight+=("$line_start $(( line_start + ${#footer} )) fg=__ZSUGGESTION_UI_MUTED__ memo=zsuggestion")
+    fi
     local preview_source="${_ZSUGGESTION_MENU_SOURCES[$_ZSUGGESTION_MENU_INDEX]}"
     local preview_description="${_ZSUGGESTION_MENU_DESCRIPTIONS[$_ZSUGGESTION_MENU_INDEX]}"
     local show_preview=0
