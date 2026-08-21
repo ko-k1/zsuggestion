@@ -349,7 +349,7 @@ PROMPT='%# '
         .args(["-L", &server, "send-keys", "-t", "test:0.0", "Escape"])
         .status()
         .unwrap();
-    thread::sleep(Duration::from_millis(150));
+    thread::sleep(Duration::from_millis(250));
     wait_for_zle(&server, &sync_file);
     dump_zle_state(&server);
     eprintln!(

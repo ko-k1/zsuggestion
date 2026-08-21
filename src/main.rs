@@ -711,6 +711,7 @@ if [[ -o interactive ]] && (( $+commands[zsuggestion] )); then
   typeset -g _ZSUGGESTION_MENU_REFRESH_TICKS=0
   typeset -g _ZSUGGESTION_MENU_GENERATION=0
   typeset -g _ZSUGGESTION_MENU_INFLIGHT_GENERATION=0
+  typeset -g _ZSUGGESTION_MENU_KEYTIMEOUT=-1
   typeset -g _ZSUGGESTION_MENU_RESTORE_INDEX=1
   typeset -g _ZSUGGESTION_RESTORE_HIGHLIGHTS=0
   typeset -g _ZSUGGESTION_CAPTURE_FOREIGN_HIGHLIGHTS=0
@@ -937,6 +938,10 @@ if [[ -o interactive ]] && (( $+commands[zsuggestion] )); then
 
   _zsuggestion_menu_clear() {
     local preserve_buffer="${1:-0}"
+    if (( _ZSUGGESTION_MENU_KEYTIMEOUT >= 0 )); then
+      KEYTIMEOUT=$_ZSUGGESTION_MENU_KEYTIMEOUT
+      _ZSUGGESTION_MENU_KEYTIMEOUT=-1
+    fi
     _zsuggestion_menu_cancel_request
     _ZSUGGESTION_MENU_ACTIVE=0
     _ZSUGGESTION_MENU_INDEX=1
@@ -1826,6 +1831,10 @@ if [[ -o interactive ]] && (( $+commands[zsuggestion] )); then
       return 0
     fi
     _ZSUGGESTION_MENU_ACTIVE=1
+    if (( _ZSUGGESTION_MENU_KEYTIMEOUT < 0 )); then
+      _ZSUGGESTION_MENU_KEYTIMEOUT=$KEYTIMEOUT
+    fi
+    (( KEYTIMEOUT > 2 )) && KEYTIMEOUT=2
     _ZSUGGESTION_MENU_INDEX=$_ZSUGGESTION_MENU_RESTORE_INDEX
     (( _ZSUGGESTION_MENU_INDEX > ${#_ZSUGGESTION_MENU_DISPLAYS} )) && _ZSUGGESTION_MENU_INDEX=${#_ZSUGGESTION_MENU_DISPLAYS}
     (( _ZSUGGESTION_MENU_INDEX < 1 )) && _ZSUGGESTION_MENU_INDEX=1
