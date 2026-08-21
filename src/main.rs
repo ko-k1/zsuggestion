@@ -1659,6 +1659,13 @@ if [[ -o interactive ]] && (( $+commands[zsuggestion] )); then
     _ZSUGGESTION_DAEMON_KINDS=("${kinds[@]}")
     _ZSUGGESTION_DAEMON_SOURCES=("${sources[@]}")
     (( any_pending )) && _ZSUGGESTION_MENU_REFRESH_TICKS=5 || _ZSUGGESTION_MENU_REFRESH_TICKS=0
+    if (( ! _ZSUGGESTION_FUZZY_ACTIVE && ${#accepts} == 0 &&
+          ! _ZSUGGESTION_MENU_ACTIVE )); then
+      _ZSUGGESTION_NATIVE_ACCEPTS=()
+      _ZSUGGESTION_NATIVE_DISPLAYS=()
+      _ZSUGGESTION_NATIVE_DESCRIPTIONS=()
+      return 0
+    fi
     if (( ! _ZSUGGESTION_FUZZY_ACTIVE && ${#accepts} == 0 && _ZSUGGESTION_MENU_ACTIVE &&
           $+functions[_main_complete] )) &&
        (( ! _ZSUGGESTION_NATIVE_REQUESTED || _ZSUGGESTION_NATIVE_REQUEST_FD >= 0 )); then
