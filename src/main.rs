@@ -709,6 +709,8 @@ if [[ -o interactive ]] && (( $+commands[zsuggestion] )); then
   typeset -g _ZSUGGESTION_MENU_INFLIGHT_CURSOR=0
   typeset -g _ZSUGGESTION_MENU_REQUEST_DIRTY=0
   typeset -g _ZSUGGESTION_MENU_REFRESH_TICKS=0
+  typeset -g _ZSUGGESTION_MENU_GENERATION=0
+  typeset -g _ZSUGGESTION_MENU_INFLIGHT_GENERATION=0
   typeset -g _ZSUGGESTION_MENU_RESTORE_INDEX=1
   typeset -g _ZSUGGESTION_RESTORE_HIGHLIGHTS=0
   typeset -g _ZSUGGESTION_CAPTURE_FOREIGN_HIGHLIGHTS=0
@@ -718,6 +720,7 @@ if [[ -o interactive ]] && (( $+commands[zsuggestion] )); then
   typeset -g _ZSUGGESTION_NATIVE_REQUEST_PID=-1
   typeset -g _ZSUGGESTION_NATIVE_REQUEST_TICKS=0
   typeset -g _ZSUGGESTION_NATIVE_START_TICKS=0
+  typeset -g _ZSUGGESTION_NATIVE_INFLIGHT_GENERATION=0
   typeset -g _ZSUGGESTION_NATIVE_REQUESTED=0
   typeset -g _ZSUGGESTION_NATIVE_INFLIGHT_BUFFER=""
   typeset -g _ZSUGGESTION_NATIVE_INFLIGHT_CURSOR=0
@@ -779,6 +782,7 @@ if [[ -o interactive ]] && (( $+commands[zsuggestion] )); then
 
   _zsuggestion_menu_cancel_query() {
     local fd="$_ZSUGGESTION_MENU_REQUEST_FD"
+    (( _ZSUGGESTION_MENU_GENERATION++ ))
     if (( fd >= 0 )); then
       zle -F "$fd" 2>/dev/null
       exec {fd}<&-
@@ -790,6 +794,7 @@ if [[ -o interactive ]] && (( $+commands[zsuggestion] )); then
 
   _zsuggestion_native_cancel() {
     local fd="$_ZSUGGESTION_NATIVE_REQUEST_FD"
+    (( _ZSUGGESTION_MENU_GENERATION++ ))
     if (( fd >= 0 )); then
       zle -F "$fd" 2>/dev/null
       exec {fd}<&-
@@ -985,18 +990,11 @@ if [[ -o interactive ]] && (( $+commands[zsuggestion] )); then
 
   _zsuggestion_menu_render() {
     local index display description kind kind_label icon marker row fill ghost=""
-    local horizontal="─" vertical="│" top_left="╭" top_right="╮"
-    local bottom_left="╰" bottom_right="╯" separator="·" ellipsis="…"
+    local separator="·" ellipsis="…"
     local selected_marker="▶ " history_icon="↺" command_icon="❯" native_icon="⇥"
     local fuzzy_ghost_prefix="  → "
     local file_icon="·" directory_icon="▸" option_icon="-" subcommand_icon="›" value_icon="="
     if (( ! _ZSUGGESTION_UTF8_UI )); then
-      horizontal="-"
-      vertical="|"
-      top_left="+"
-      top_right="+"
-      bottom_left="+"
-      bottom_right="+"
       separator="|"
       ellipsis="~"
       selected_marker="> "
@@ -1237,7 +1235,7 @@ if [[ -o interactive ]] && (( $+commands[zsuggestion] )); then
       POSTDISPLAY+=$'\n'"${padding}${footer}"
       region_highlight+=("$line_start $(( line_start + ${#footer} )) fg=__ZSUGGESTION_UI_MUTED__ memo=zsuggestion")
     else
-      local footer=" Tab part ${separator} __ZSUGGESTION_COMPLETION_KEY_LABEL__ full "
+      local footer=" Up/Down select ${separator} Tab part ${separator} __ZSUGGESTION_COMPLETION_KEY_LABEL__ full "
       line_start=$(( ${#input} + ${#POSTDISPLAY} + 1 + indent ))
       POSTDISPLAY+=$'\n'"${padding}${footer}"
       region_highlight+=("$line_start $(( line_start + ${#footer} )) fg=__ZSUGGESTION_UI_MUTED__ memo=zsuggestion")
@@ -1258,9 +1256,9 @@ if [[ -o interactive ]] && (( $+commands[zsuggestion] )); then
       local preview_width=$(( ${COLUMNS:-80} - indent - 1 ))
       (( preview_width > 96 )) && preview_width=96
       if (( preview_width >= 40 )); then
-        local preview_label=" Preview: ${selected} " preview_top preview_bottom preview_line
+        local preview_label="Preview: ${selected}"
         local preview_style style_span style_start style_end style_value style_rest
-        local preview_content_width=$(( preview_width - 4 ))
+        local preview_content_width=$(( preview_width - 2 ))
         local -a preview_lines
         if (( ${#_ZSUGGESTION_PREVIEW_LINES} )); then
           preview_lines=("${_ZSUGGESTION_PREVIEW_LINES[@]}")
@@ -1268,25 +1266,20 @@ if [[ -o interactive ]] && (( $+commands[zsuggestion] )); then
           preview_lines=("Source: ${_ZSUGGESTION_MENU_SOURCES[$_ZSUGGESTION_MENU_INDEX]} / ${_ZSUGGESTION_MENU_KINDS[$_ZSUGGESTION_MENU_INDEX]}")
           preview_lines+=("$preview_description")
         fi
-        (( ${#preview_label} > preview_width - 2 )) && \
-          preview_label="${preview_label[1,$(( preview_width - 3 ))]}${ellipsis}"
-        printf -v fill '%*s' "$(( preview_width - ${#preview_label} - 2 ))" ""
-        fill="${fill// /$horizontal}"
-        preview_top="${top_left}${preview_label}${fill}${top_right}"
+        (( ${#preview_label} > preview_width )) && \
+          preview_label="${preview_label[1,$(( preview_width - 1 ))]}${ellipsis}"
+        local line_start
         line_start=$(( ${#input} + ${#POSTDISPLAY} + 1 + indent ))
-        POSTDISPLAY+=$'\n'"${padding}${preview_top}"
-        region_highlight+=("$line_start $(( line_start + ${#preview_top} )) fg=__ZSUGGESTION_UI_BORDER__ memo=zsuggestion")
+        POSTDISPLAY+=$'\n'"${padding}${preview_label}"
+        region_highlight+=("$line_start $(( line_start + ${#preview_label} )) fg=__ZSUGGESTION_UI_MUTED__ memo=zsuggestion")
         local preview_index
         for (( preview_index = 1; preview_index <= ${#preview_lines} && preview_index <= 8; preview_index++ )); do
           preview_line="${preview_lines[$preview_index]}"
           (( ${#preview_line} > preview_content_width )) && \
             preview_line="${preview_line[1,$(( preview_content_width - 1 ))]}${ellipsis}"
-          printf -v row '%s %-*s %s' "$vertical" "$preview_content_width" "$preview_line" "$vertical"
           line_start=$(( ${#input} + ${#POSTDISPLAY} + 1 + indent ))
-          POSTDISPLAY+=$'\n'"${padding}${row}"
-          region_highlight+=("$line_start $(( line_start + 1 )) fg=__ZSUGGESTION_UI_BORDER__ memo=zsuggestion")
-          region_highlight+=("$(( line_start + 1 )) $(( line_start + ${#row} - 1 )) fg=__ZSUGGESTION_UI_TEXT__ memo=zsuggestion")
-          region_highlight+=("$(( line_start + ${#row} - 1 )) $(( line_start + ${#row} )) fg=__ZSUGGESTION_UI_BORDER__ memo=zsuggestion")
+          POSTDISPLAY+=$'\n'"${padding}${preview_line}"
+          region_highlight+=("$line_start $(( line_start + ${#preview_line} )) fg=__ZSUGGESTION_UI_TEXT__ memo=zsuggestion")
           preview_style="${_ZSUGGESTION_PREVIEW_STYLES[$preview_index]}"
           for style_span in ${(s:;:)preview_style}; do
             style_start="${style_span%%:*}"
@@ -1297,15 +1290,9 @@ if [[ -o interactive ]] && (( $+commands[zsuggestion] )); then
             (( style_start >= ${#preview_line} )) && continue
             (( style_end > ${#preview_line} )) && style_end=${#preview_line}
             (( style_start < style_end )) && \
-              region_highlight+=("$(( line_start + 2 + style_start )) $(( line_start + 2 + style_end )) ${style_value} memo=zsuggestion")
+              region_highlight+=("$(( line_start + style_start )) $(( line_start + style_end )) ${style_value} memo=zsuggestion")
           done
         done
-        printf -v fill '%*s' "$(( preview_width - 2 ))" ""
-        fill="${fill// /$horizontal}"
-        preview_bottom="${bottom_left}${fill}${bottom_right}"
-        line_start=$(( ${#input} + ${#POSTDISPLAY} + 1 + indent ))
-        POSTDISPLAY+=$'\n'"${padding}${preview_bottom}"
-        region_highlight+=("$line_start $(( line_start + ${#preview_bottom} )) fg=__ZSUGGESTION_UI_BORDER__ memo=zsuggestion")
       fi
     fi
     _ZSUGGESTION_MENU_OWNS_DISPLAY=1
@@ -1634,7 +1621,8 @@ if [[ -o interactive ]] && (( $+commands[zsuggestion] )); then
       exec {fd}<&-
       return 0
     fi
-    if [[ "$_ZSUGGESTION_MENU_BUFFER" != "$_ZSUGGESTION_MENU_INFLIGHT_BUFFER" ]]; then
+    if [[ "$_ZSUGGESTION_MENU_BUFFER" != "$_ZSUGGESTION_MENU_INFLIGHT_BUFFER" ]] ||
+       (( _ZSUGGESTION_MENU_INFLIGHT_GENERATION != _ZSUGGESTION_MENU_GENERATION )); then
       zle -F "$fd" 2>/dev/null
       exec {fd}<&-
       _ZSUGGESTION_MENU_REQUEST_FD=-1
@@ -1687,7 +1675,8 @@ if [[ -o interactive ]] && (( $+commands[zsuggestion] )); then
       exec {fd}<&-
       return 0
     fi
-    if [[ "$_ZSUGGESTION_MENU_BUFFER" != "$_ZSUGGESTION_NATIVE_INFLIGHT_BUFFER" ]]; then
+    if [[ "$_ZSUGGESTION_MENU_BUFFER" != "$_ZSUGGESTION_NATIVE_INFLIGHT_BUFFER" ]] ||
+       (( _ZSUGGESTION_NATIVE_INFLIGHT_GENERATION != _ZSUGGESTION_MENU_GENERATION )); then
       zle -F "$fd" 2>/dev/null
       exec {fd}<&-
       _ZSUGGESTION_NATIVE_REQUEST_FD=-1
@@ -1925,6 +1914,7 @@ if [[ -o interactive ]] && (( $+commands[zsuggestion] )); then
         _ZSUGGESTION_NATIVE_REQUESTED=1
         _ZSUGGESTION_NATIVE_INFLIGHT_BUFFER="$_ZSUGGESTION_MENU_REQUEST_BUFFER"
         _ZSUGGESTION_NATIVE_INFLIGHT_CURSOR=$_ZSUGGESTION_MENU_REQUEST_CURSOR
+        _ZSUGGESTION_NATIVE_INFLIGHT_GENERATION=$_ZSUGGESTION_MENU_GENERATION
         _zsuggestion_call_native_completion zsuggestion-native-capture
       fi
     fi
@@ -1946,6 +1936,7 @@ if [[ -o interactive ]] && (( $+commands[zsuggestion] )); then
     _zsuggestion_menu_cancel_query
     _ZSUGGESTION_MENU_INFLIGHT_BUFFER="$buffer"
     _ZSUGGESTION_MENU_INFLIGHT_CURSOR=$cursor
+    _ZSUGGESTION_MENU_INFLIGHT_GENERATION=$_ZSUGGESTION_MENU_GENERATION
     if (( _ZSUGGESTION_FUZZY_ACTIVE )); then
       exec {query_fd}< <(command zsuggestion fuzzy \
         --query "$_ZSUGGESTION_FUZZY_QUERY" \
@@ -2034,7 +2025,7 @@ if [[ -o interactive ]] && (( $+commands[zsuggestion] )); then
   }
 
   _zsuggestion_interrupt() {
-    _zsuggestion_menu_clear
+    _zsuggestion_menu_clear 1
     POSTDISPLAY=""
     _ZSUGGESTION_FUZZY_ACTIVE=0
     _ZSUGGESTION_FUZZY_BASE=""
@@ -2146,6 +2137,13 @@ if [[ -o interactive ]] && (( $+commands[zsuggestion] )); then
       zle -R
       return
     fi
+    if (( _ZSUGGESTION_MENU_ACTIVE )); then
+      _zsuggestion_menu_clear 1
+      POSTDISPLAY=""
+      region_highlight=( "${_ZSUGGESTION_FOREIGN_HIGHLIGHTS[@]}" )
+      zle -R
+      return
+    fi
     zle _zsuggestion-native-escape
   }
 
@@ -2159,18 +2157,34 @@ if [[ -o interactive ]] && (( $+commands[zsuggestion] )); then
   }
 
   _zsuggestion_history_up() {
+    if (( _ZSUGGESTION_MENU_ACTIVE )); then
+      zle zsuggestion-menu-up
+      return
+    fi
     _zsuggestion_history_move _zsuggestion-native-history-up
   }
 
   _zsuggestion_history_up_application() {
+    if (( _ZSUGGESTION_MENU_ACTIVE )); then
+      zle zsuggestion-menu-up
+      return
+    fi
     _zsuggestion_history_move _zsuggestion-native-history-up-application
   }
 
   _zsuggestion_history_down() {
+    if (( _ZSUGGESTION_MENU_ACTIVE )); then
+      zle zsuggestion-menu-down
+      return
+    fi
     _zsuggestion_history_move _zsuggestion-native-history-down
   }
 
   _zsuggestion_history_down_application() {
+    if (( _ZSUGGESTION_MENU_ACTIVE )); then
+      zle zsuggestion-menu-down
+      return
+    fi
     _zsuggestion_history_move _zsuggestion-native-history-down-application
   }
 
@@ -2381,7 +2395,6 @@ fi
         "__ZSUGGESTION_UI_PROMPT_OFFSET__",
         &settings.ui.prompt_offset.to_string(),
     )
-    .replace("__ZSUGGESTION_UI_BORDER__", &settings.ui.border)
     .replace("__ZSUGGESTION_UI_ACCENT__", &settings.ui.accent)
     .replace("__ZSUGGESTION_UI_TEXT__", &settings.ui.text)
     .replace("__ZSUGGESTION_UI_MUTED__", &settings.ui.muted)

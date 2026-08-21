@@ -75,7 +75,7 @@ The integration:
   candidates exceed the visible window. Long rows preserve the completion
   suffix, rendering as `… suggestion` when the typed command prefix would hide
   it.
-- Adds a lazy preview box at 100 columns or wider only when useful content is
+- Adds a lazy preview pane at 100 columns or wider only when useful content is
   available. History-only and generic rows stay compact; command details reuse
   the existing asynchronous description workers, and selected native text files
   are read through a bounded, sanitized background helper. Changing rows erases
@@ -90,8 +90,11 @@ The integration:
 - Uses Ctrl-N and Ctrl-K to move through an open menu and updates inline ghost
   text to preview the selected row; outside the menu their prior widgets remain
   active.
-- Leaves Up and Down dedicated to their existing Zsh history widgets, cancelling
-  stale completion work before history changes the command buffer.
+- Uses Up and Down to move the popup selection while the menu is open, like an
+  nvim completion menu; with no menu they fall back to the existing Zsh history
+  widgets, cancelling stale completion work before history changes the buffer.
+- Dismisses the popup with Escape without touching the command buffer, so a new
+  query starts fresh the next time the buffer changes.
 - Accepts the full suggestion with Ctrl-Space, or the shortest next segment with
   Tab; Enter remains the shell's untouched command-submission binding.
 - Leaves tmux pane titles and automatic window naming entirely under tmux and
@@ -121,7 +124,7 @@ file remains selectable with a following Tab, which appends a space.
 The same setup works inside tmux and on SSH hosts. Each remote host runs its own
 daemon and keeps its own local history; tmux panes on that host share it.
 zsuggestion uses its Unicode UI when `locale charmap` reports UTF-8 and
-automatically falls back to ASCII borders and markers otherwise.
+automatically falls back to ASCII markers, scrollbars, and separators otherwise.
 
 Image and PDF candidates currently show bounded metadata rather than graphics.
 Kitty image transmission needs terminal-owned image IDs and cleanup that ZLE's
@@ -187,7 +190,6 @@ successful_first = true
 menu_width = 64
 max_visible = 6
 prompt_offset = 2
-border = "4"
 accent = "10"
 text = "7"
 muted = "8"

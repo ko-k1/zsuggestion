@@ -78,16 +78,19 @@ Every response includes:
 The initial engine only completes at the end of the buffer. It abstains from
 mid-line edits until a shell-aware parser can produce safe replacement ranges.
 
-The Zsh frontend refreshes an inline candidate menu when the command buffer
+The Zsh frontend refreshes an inline candidate popup when the command buffer
 changes and highlights the highest-ranked candidate. It owns `POSTDISPLAY` while
-suggestions are active, so the ghost text and bordered menu participate in ZLE's
-normal multiline layout instead of being printed into terminal history. ZLE
-`region_highlight` entries style matches, provenance, borders, and the selected
-row using validated colors from the UI configuration. Ctrl-N and Ctrl-K move
-the selection; Shift-Tab cycles it, and the configured completion key accepts
-its configured amount and immediately queries again. Tab accepts the shortest
-next semantic segment while the menu is open. Boundaries include words, paths,
-assignments, lists, URLs, and remote destinations such as `user@host:/path`;
+suggestions are active, so the ghost text and borderless popup participate in
+ZLE's normal multiline layout instead of being printed into terminal history.
+ZLE `region_highlight` entries style matches, provenance, descriptions, kind
+badges, the scrollbar, and the full-width selected-row background using
+validated colors from the UI configuration. Arrow keys, Ctrl-N, and Ctrl-K move
+the selection; Shift-Tab cycles it upward; Escape dismisses the popup without
+touching the buffer; and the configured completion key
+accepts its configured amount and immediately queries again. Tab accepts the
+shortest next semantic segment while the menu is open. Boundaries include words,
+paths, assignments, lists, URLs, and remote destinations such as
+`user@host:/path`;
 quoted, escaped, and bracketed IPv6 separators remain intact. When multiple
 filesystem candidates are present, Tab accepts their common insertion prefix if
 one exists and otherwise leaves the buffer unchanged instead of selecting an
@@ -99,8 +102,9 @@ editing keymap, so character insertion and Backspace keep their ordinary
 behavior. Enter is never rebound. With no menu, Tab and Shift-Tab clear stale
 display state and delegate to the widgets they replaced. Native completion entry
 is serialized so the asynchronous ticker cannot recursively enter Zsh completion.
-Up and Down always delegate to the history widgets they replaced after cancelling
-menu requests, preventing stale callbacks from restoring the pre-history buffer.
+Up and Down move the popup selection while the menu is open; with no menu they
+delegate to the history widgets after cancelling menu requests, preventing stale
+callbacks from restoring the pre-history buffer.
 The integration snapshots native widgets only on first load, but reinstalls its
 functions, hooks, and bindings on every evaluation so sourcing `.zshrc` remains
 safe after `compinit` or other ZLE plugins recreate their wrappers.
@@ -183,12 +187,12 @@ preserves the current numeric row across asynchronous updates, so newly inserted
 providers cannot move row 1 to a seemingly random position.
 
 At shell initialization, the frontend checks `locale charmap`. UTF-8 locales use
-the bordered glyph UI; other locales use single-byte ASCII borders, markers,
+the borderless glyph UI; other locales use single-byte ASCII fallbacks, markers,
 icons, separators, and truncation characters so ZLE does not expose encoded
 bytes as `<e2><...>` sequences in SSH or container sessions.
 
-At 100 columns or wider, the selected candidate gets a separate preview box only
-after useful content exists. History and generic metadata never reserve preview
+At 100 columns or wider, the selected candidate gets a borderless preview pane
+only after useful content exists. History and generic metadata never reserve preview
 space. Command preview text follows the existing lazy description lifecycle. Native
 and explicit filesystem regular-file candidates use a separate bounded helper
 that reads at most 16 KiB,

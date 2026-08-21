@@ -321,6 +321,36 @@ PROMPT='%# '
         "async provider merging moved the menu away from row 1: {reordered_state:?}"
     );
     Command::new("tmux")
+        .args(["-L", &server, "send-keys", "-t", "test:0.0", "Down"])
+        .status()
+        .unwrap();
+    thread::sleep(Duration::from_millis(150));
+    dump_zle_state(&server);
+    let arrow_down_state = fs::read_to_string(&state_dump).unwrap();
+    let arrow_down_fields: Vec<_> = arrow_down_state.trim_end().split('|').collect();
+    assert_eq!(arrow_down_fields[0], "1", "arrow key closed the popup menu");
+    assert_eq!(
+        arrow_down_fields[5], "2",
+        "Down did not move the popup selection while open: {arrow_down_state:?}"
+    );
+    Command::new("tmux")
+        .args(["-L", &server, "send-keys", "-t", "test:0.0", "Up"])
+        .status()
+        .unwrap();
+    thread::sleep(Duration::from_millis(150));
+    dump_zle_state(&server);
+    let arrow_up_state = fs::read_to_string(&state_dump).unwrap();
+    let arrow_up_fields: Vec<_> = arrow_up_state.trim_end().split('|').collect();
+    assert_eq!(
+        arrow_up_fields[5], "1",
+        "Up did not move the popup selection back: {arrow_up_state:?}"
+    );
+    Command::new("tmux")
+        .args(["-L", &server, "send-keys", "-t", "test:0.0", "Escape"])
+        .status()
+        .unwrap();
+    wait_for_zle(&server, &sync_file);
+    Command::new("tmux")
         .args(["-L", &server, "send-keys", "-t", "test:0.0", "Up"])
         .status()
         .unwrap();

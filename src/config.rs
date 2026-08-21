@@ -34,7 +34,6 @@ pub struct UiSettings {
     pub menu_width: usize,
     pub max_visible: usize,
     pub prompt_offset: usize,
-    pub border: String,
     pub accent: String,
     pub text: String,
     pub muted: String,
@@ -76,7 +75,6 @@ impl Default for UiSettings {
             menu_width: 64,
             max_visible: 6,
             prompt_offset: 2,
-            border: "4".to_owned(),
             accent: "10".to_owned(),
             text: "7".to_owned(),
             muted: "8".to_owned(),
@@ -131,7 +129,6 @@ impl Settings {
             bail!("ui.prompt_offset must not exceed 40");
         }
         for (name, color) in [
-            ("border", &self.ui.border),
             ("accent", &self.ui.accent),
             ("text", &self.ui.text),
             ("muted", &self.ui.muted),
@@ -198,7 +195,6 @@ successful_first = true
 menu_width = 64
 max_visible = 6
 prompt_offset = 2
-border = "4"
 accent = "10"
 text = "7"
 muted = "8"
@@ -350,11 +346,11 @@ mod tests {
 
     #[test]
     fn validates_ui_colors() {
-        assert!(validate_color("border", "4").is_ok());
-        assert!(validate_color("border", "255").is_ok());
-        assert!(validate_color("border", "#5f87af").is_ok());
-        assert!(validate_color("border", "256").is_err());
-        assert!(validate_color("border", "blue").is_err());
+        assert!(validate_color("accent", "4").is_ok());
+        assert!(validate_color("accent", "255").is_ok());
+        assert!(validate_color("accent", "#5f87af").is_ok());
+        assert!(validate_color("accent", "256").is_err());
+        assert!(validate_color("accent", "blue").is_err());
     }
 
     #[cfg(unix)]
