@@ -350,6 +350,11 @@ PROMPT='%# '
         .status()
         .unwrap();
     wait_for_zle(&server, &sync_file);
+    dump_zle_state(&server);
+    eprintln!(
+        "CI-DEBUG post-escape: {:?}",
+        fs::read_to_string(&state_dump).unwrap()
+    );
     Command::new("tmux")
         .args(["-L", &server, "send-keys", "-t", "test:0.0", "Up"])
         .status()
@@ -357,6 +362,7 @@ PROMPT='%# '
     thread::sleep(Duration::from_millis(350));
     dump_zle_state(&server);
     let history_up_state = fs::read_to_string(&state_dump).unwrap();
+    eprintln!("CI-DEBUG post-history-up: {history_up_state:?}");
     let history_up_fields: Vec<_> = history_up_state.trim_end().split('|').collect();
     assert_eq!(history_up_fields[0], "0");
     assert_eq!(history_up_fields[3], "history-arrow-up");
