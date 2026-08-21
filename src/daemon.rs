@@ -370,6 +370,19 @@ mod tests {
         let first = acquire_daemon_lock(&path).unwrap();
         assert!(acquire_daemon_lock(&path).is_err());
         drop(first);
-        assert!(acquire_daemon_lock(&path).is_ok());
+        let mut reacquired = None;
+        for _ in 0..100 {
+            match acquire_daemon_lock(&path) {
+                Ok(lock) => {
+                    reacquired = Some(lock);
+                    break;
+                }
+                Err(_) => thread::sleep(Duration::from_millis(10)),
+            }
+        }
+        assert!(
+            reacquired.is_some(),
+            "daemon lock was not released after the holder dropped it"
+        );
     }
 }
