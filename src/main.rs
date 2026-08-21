@@ -2133,6 +2133,7 @@ if [[ -o interactive ]] && (( $+commands[zsuggestion] )); then
   }
 
   _zsuggestion_escape() {
+    typeset -g _ZSUGGESTION_ESCAPE_RAN=1
     if (( _ZSUGGESTION_FUZZY_ACTIVE )); then
       local base="$_ZSUGGESTION_FUZZY_BASE"
       _zsuggestion_menu_clear
