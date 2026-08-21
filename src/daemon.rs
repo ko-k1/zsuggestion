@@ -115,7 +115,10 @@ fn prepare_socket(path: &Path) -> Result<()> {
         bail!("refusing to replace non-socket path {}", path.display());
     }
     if UnixStream::connect(path).is_ok() {
-        bail!("zsuggestion daemon is already running at {}", path.display());
+        bail!(
+            "zsuggestion daemon is already running at {}",
+            path.display()
+        );
     }
     fs::remove_file(path)
         .with_context(|| format!("failed to remove stale socket {}", path.display()))
@@ -130,8 +133,12 @@ fn acquire_daemon_lock(path: &Path) -> Result<File> {
         .open(path)
         .with_context(|| format!("failed to open daemon lock {}", path.display()))?;
     fs::set_permissions(path, fs::Permissions::from_mode(0o600))?;
-    file.try_lock_exclusive()
-        .with_context(|| format!("zsuggestion daemon is already running for {}", path.display()))?;
+    file.try_lock_exclusive().with_context(|| {
+        format!(
+            "zsuggestion daemon is already running for {}",
+            path.display()
+        )
+    })?;
     Ok(file)
 }
 

@@ -544,9 +544,9 @@ PROMPT='%# '
     let segment_capture = capture_pane(&server, false);
     let state_after_tab = fs::read_to_string(&state_dump).unwrap();
     assert!(
-        state_after_tab
-            .contains("|zsuggestion-native-fixture native/|zsuggestion-native-fixture native/|path/file")
-            && state_after_tab.contains("|1|zsuggestion-native-fixture native/path/file"),
+        state_after_tab.contains(
+            "|zsuggestion-native-fixture native/|zsuggestion-native-fixture native/|path/file"
+        ) && state_after_tab.contains("|1|zsuggestion-native-fixture native/path/file"),
         "Tab did not accept the next path segment and reset selection; state was {state_after_tab:?}:\n{segment_capture}"
     );
     Command::new("tmux")
@@ -561,8 +561,9 @@ PROMPT='%# '
     let second_segment_capture = capture_pane(&server, false);
     let state_after_second_tab = fs::read_to_string(&state_dump).unwrap();
     assert!(
-        state_after_second_tab
-            .contains("|zsuggestion-native-fixture native/path/|zsuggestion-native-fixture native/path/|file"),
+        state_after_second_tab.contains(
+            "|zsuggestion-native-fixture native/path/|zsuggestion-native-fixture native/path/|file"
+        ),
         "a repeated Tab did not accept the next path segment; state was {state_after_second_tab:?}:\n{second_segment_capture}"
     );
     Command::new("tmux")

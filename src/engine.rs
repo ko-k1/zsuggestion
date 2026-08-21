@@ -1052,7 +1052,14 @@ mod tests {
         let mut settings = Settings::default();
         settings.completion.accept = AcceptMode::Segment;
         store
-            .record("cd ~/dev/gitrepos/zsuggestion", "/repo", 0, 100, "test", true)
+            .record(
+                "cd ~/dev/gitrepos/zsuggestion",
+                "/repo",
+                0,
+                100,
+                "test",
+                true,
+            )
             .unwrap();
 
         let completion = complete(
@@ -1067,7 +1074,10 @@ mod tests {
         .unwrap();
 
         assert_eq!(completion.candidates.len(), 1);
-        assert_eq!(completion.candidates[0].insert_text, "ev/gitrepos/zsuggestion");
+        assert_eq!(
+            completion.candidates[0].insert_text,
+            "ev/gitrepos/zsuggestion"
+        );
         assert_eq!(completion.candidates[0].accept_text, "ev/");
         assert_eq!(completion.candidates[0].description, "used here");
 
@@ -1081,7 +1091,10 @@ mod tests {
             &Settings::default(),
         )
         .unwrap();
-        assert_eq!(completion.candidates[0].accept_text, "ev/gitrepos/zsuggestion");
+        assert_eq!(
+            completion.candidates[0].accept_text,
+            "ev/gitrepos/zsuggestion"
+        );
     }
 
     #[test]

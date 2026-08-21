@@ -143,7 +143,9 @@ fn start_daemon(paths: &Paths) -> Result<()> {
             Ok(())
         });
     }
-    command.spawn().context("failed to start zsuggestion daemon")?;
+    command
+        .spawn()
+        .context("failed to start zsuggestion daemon")?;
     Ok(())
 }
 

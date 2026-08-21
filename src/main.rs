@@ -8,11 +8,11 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use std::{io, io::Read, io::Write};
 
 use anyhow::{Context, Result, bail};
+use clap::{Parser, Subcommand, ValueEnum};
 use zsuggestion::client;
 use zsuggestion::config::{Paths, Settings, completion_key_sequence};
 use zsuggestion::daemon;
 use zsuggestion::protocol::{Request, Response};
-use clap::{Parser, Subcommand, ValueEnum};
 
 #[derive(Debug, Parser)]
 #[command(name = "zsuggestion", version, about)]
@@ -2476,7 +2476,9 @@ mod tests {
         assert!(!integration.contains("ASTER_TMUX_SHELL_TITLE"));
         assert!(!integration.contains("zsuggestion-menu-enter"));
         assert!(!integration.contains("bindkey '^M' zsuggestion"));
-        assert!(integration.contains("bindkey -M zsuggestion-fuzzy '^M' zsuggestion-fuzzy-execute"));
+        assert!(
+            integration.contains("bindkey -M zsuggestion-fuzzy '^M' zsuggestion-fuzzy-execute")
+        );
         assert!(!integration.contains("__ZSUGGESTION_COMPLETION_KEY__"));
         assert!(!integration.contains("__ZSUGGESTION_UI_"));
 
