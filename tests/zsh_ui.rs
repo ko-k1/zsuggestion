@@ -1273,7 +1273,7 @@ PROMPT='%# '
         thread::sleep(Duration::from_millis(50));
     }
     assert!(
-        ascii_capture.contains("Cmd") && ascii_capture.contains("> "),
+        ascii_capture.contains("Cmd") && ascii_capture.contains("| $"),
         "ASCII fallback menu was absent:\n{ascii_capture}"
     );
     assert!(

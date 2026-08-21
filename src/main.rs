@@ -991,13 +991,13 @@ if [[ -o interactive ]] && (( $+commands[zsuggestion] )); then
   _zsuggestion_menu_render() {
     local index display description kind kind_label icon marker row fill ghost=""
     local separator="·" ellipsis="…"
-    local selected_marker="▶ " history_icon="↺" command_icon="❯" native_icon="⇥"
+    local selected_marker="▌ " history_icon="↺" command_icon="❯" native_icon="⇥"
     local fuzzy_ghost_prefix="  → "
     local file_icon="·" directory_icon="▸" option_icon="-" subcommand_icon="›" value_icon="="
     if (( ! _ZSUGGESTION_UTF8_UI )); then
       separator="|"
       ellipsis="~"
-      selected_marker="> "
+      selected_marker="| "
       history_icon="H"
       command_icon="$"
       native_icon="T"
