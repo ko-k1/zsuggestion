@@ -1114,7 +1114,7 @@ if [[ -o interactive ]] && (( $+commands[zsuggestion] )); then
     local description_width=24
     (( box_width < 64 )) && description_width=16
     local kind_width=6
-    local title_width=$(( box_width - description_width - kind_width - 7 ))
+    local title_width=$(( box_width - description_width - kind_width - 8 ))
     local thumb="█" track="│"
     if (( ! _ZSUGGESTION_UTF8_UI )); then
       thumb='#'
@@ -1187,7 +1187,7 @@ if [[ -o interactive ]] && (( $+commands[zsuggestion] )); then
         local row_offset=$(( index - _ZSUGGESTION_MENU_START ))
         (( row_offset >= thumb_pos && row_offset < thumb_pos + thumb_size )) && scrollbar_char="$thumb"
       fi
-      printf -v row '%s%s %-*s %-*s %*s%s' \
+      printf -v row '%s%s %-*s %-*s %*s %s' \
         "$marker" "$icon" "$title_width" "$display" \
         "$description_width" "$description" "$kind_width" "$kind_label" "$scrollbar_char"
 
