@@ -1203,7 +1203,6 @@ if [[ -o interactive ]] && (( $+commands[zsuggestion] )); then
       fi
       local rail_attrs="fg=__ZSUGGESTION_UI_MUTED__"
       [[ "$scrollbar_char" == "$thumb" ]] && rail_attrs="fg=__ZSUGGESTION_UI_SELECTED_TEXT__"
-      (( index == _ZSUGGESTION_MENU_INDEX )) && rail_attrs="${rail_attrs},bg=__ZSUGGESTION_UI_SELECTED_BACKGROUND__"
       region_highlight+=("$(( line_start + ${#row} - 1 )) $(( line_start + ${#row} )) $rail_attrs memo=zsuggestion")
 
       local match_length=0
