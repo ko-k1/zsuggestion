@@ -1114,7 +1114,7 @@ if [[ -o interactive ]] && (( $+commands[zsuggestion] )); then
     local description_width=24
     (( box_width < 64 )) && description_width=16
     local kind_width=6
-    local title_width=$(( box_width - description_width - kind_width - 8 ))
+    local title_width=$(( box_width - description_width - kind_width - 7 ))
     local thumb="█" track="│"
     if (( ! _ZSUGGESTION_UTF8_UI )); then
       thumb='#'
@@ -1187,20 +1187,21 @@ if [[ -o interactive ]] && (( $+commands[zsuggestion] )); then
         local row_offset=$(( index - _ZSUGGESTION_MENU_START ))
         (( row_offset >= thumb_pos && row_offset < thumb_pos + thumb_size )) && scrollbar_char="$thumb"
       fi
-      printf -v row '%s%s %-*s %-*s %*s %s' \
+      printf -v row '%s%s %-*s %-*s %*s%s' \
         "$marker" "$icon" "$title_width" "$display" \
         "$description_width" "$description" "$kind_width" "$kind_label" "$scrollbar_char"
 
       line_start=$(( ${#input} + ${#POSTDISPLAY} + 1 + indent ))
       POSTDISPLAY+=$'\n'"${padding}${row}"
       if (( index == _ZSUGGESTION_MENU_INDEX )); then
-        region_highlight+=("$(( line_start )) $(( line_start + ${#row} - 2 )) bg=__ZSUGGESTION_UI_SELECTED_BACKGROUND__,fg=__ZSUGGESTION_UI_SELECTED_TEXT__ memo=zsuggestion")
+        region_highlight+=("$(( line_start )) $(( line_start + ${#row} - 1 )) bg=__ZSUGGESTION_UI_SELECTED_BACKGROUND__,fg=__ZSUGGESTION_UI_SELECTED_TEXT__ memo=zsuggestion")
         region_highlight+=("$(( line_start )) $(( line_start + 2 )) bg=__ZSUGGESTION_UI_SELECTED_BACKGROUND__,fg=__ZSUGGESTION_UI_ACCENT__,bold memo=zsuggestion")
         region_highlight+=("$(( line_start + 2 )) $(( line_start + 4 )) bg=__ZSUGGESTION_UI_SELECTED_BACKGROUND__,fg=__ZSUGGESTION_UI_ACCENT__ memo=zsuggestion")
       else
         region_highlight+=("$(( line_start )) $(( line_start + ${#row} - 1 )) fg=__ZSUGGESTION_UI_TEXT__ memo=zsuggestion")
         region_highlight+=("$(( line_start )) $(( line_start + 4 )) fg=__ZSUGGESTION_UI_MUTED__ memo=zsuggestion")
       fi
+      region_highlight+=("$(( line_start + ${#row} - 1 )) $(( line_start + ${#row} )) fg=__ZSUGGESTION_UI_MUTED__ memo=zsuggestion")
 
       local match_length=0
       (( ! _ZSUGGESTION_FUZZY_ACTIVE && ! display_truncated )) && match_length=${#input}
