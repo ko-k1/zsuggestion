@@ -75,7 +75,7 @@ impl Default for UiSettings {
             menu_width: 64,
             max_visible: 6,
             prompt_offset: 2,
-            accent: "10".to_owned(),
+            accent: "14".to_owned(),
             text: "7".to_owned(),
             muted: "8".to_owned(),
             ghost: "8".to_owned(),
@@ -195,7 +195,7 @@ successful_first = true
 menu_width = 64
 max_visible = 6
 prompt_offset = 2
-accent = "10"
+accent = "14"
 text = "7"
 muted = "8"
 ghost = "8"

@@ -1194,7 +1194,7 @@ if [[ -o interactive ]] && (( $+commands[zsuggestion] )); then
       line_start=$(( ${#input} + ${#POSTDISPLAY} + 1 + indent ))
       POSTDISPLAY+=$'\n'"${padding}${row}"
       if (( index == _ZSUGGESTION_MENU_INDEX )); then
-        region_highlight+=("$(( line_start )) $(( line_start + ${#row} - 1 )) bg=__ZSUGGESTION_UI_SELECTED_BACKGROUND__,fg=__ZSUGGESTION_UI_SELECTED_TEXT__ memo=zsuggestion")
+        region_highlight+=("$(( line_start )) $(( line_start + ${#row} - 2 )) bg=__ZSUGGESTION_UI_SELECTED_BACKGROUND__,fg=__ZSUGGESTION_UI_SELECTED_TEXT__ memo=zsuggestion")
         region_highlight+=("$(( line_start )) $(( line_start + 2 )) bg=__ZSUGGESTION_UI_SELECTED_BACKGROUND__,fg=__ZSUGGESTION_UI_ACCENT__,bold memo=zsuggestion")
         region_highlight+=("$(( line_start + 2 )) $(( line_start + 4 )) bg=__ZSUGGESTION_UI_SELECTED_BACKGROUND__,fg=__ZSUGGESTION_UI_ACCENT__ memo=zsuggestion")
       else
