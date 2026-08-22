@@ -308,7 +308,7 @@ PROMPT='%# '
         .status()
         .unwrap();
     thread::sleep(Duration::from_millis(500));
-    dump_zle_state(&server);
+    dump_zle_state(&server, &state_dump);
     let reordered_state = fs::read_to_string(&state_dump).unwrap();
     let reordered_fields: Vec<_> = reordered_state.trim_end().split('|').collect();
     assert_eq!(reordered_fields[0], "1", "cd path menu was not active");
@@ -325,7 +325,7 @@ PROMPT='%# '
         .status()
         .unwrap();
     thread::sleep(Duration::from_millis(150));
-    dump_zle_state(&server);
+    dump_zle_state(&server, &state_dump);
     let arrow_down_state = fs::read_to_string(&state_dump).unwrap();
     let arrow_down_fields: Vec<_> = arrow_down_state.trim_end().split('|').collect();
     assert_eq!(arrow_down_fields[0], "1", "arrow key closed the popup menu");
@@ -338,7 +338,7 @@ PROMPT='%# '
         .status()
         .unwrap();
     thread::sleep(Duration::from_millis(150));
-    dump_zle_state(&server);
+    dump_zle_state(&server, &state_dump);
     let arrow_up_state = fs::read_to_string(&state_dump).unwrap();
     let arrow_up_fields: Vec<_> = arrow_up_state.trim_end().split('|').collect();
     assert_eq!(
@@ -346,7 +346,7 @@ PROMPT='%# '
         "Up did not move the popup selection back: {arrow_up_state:?}"
     );
     fs::write(&escape_request, "").unwrap();
-    dump_zle_state(&server);
+    dump_zle_state(&server, &state_dump);
     let escaped_state = fs::read_to_string(&state_dump).unwrap();
     let escaped_fields: Vec<_> = escaped_state.trim_end().split('|').collect();
     assert_eq!(
@@ -362,7 +362,7 @@ PROMPT='%# '
         .status()
         .unwrap();
     thread::sleep(Duration::from_millis(350));
-    dump_zle_state(&server);
+    dump_zle_state(&server, &state_dump);
     let history_up_state = fs::read_to_string(&state_dump).unwrap();
     let history_up_fields: Vec<_> = history_up_state.trim_end().split('|').collect();
     assert_eq!(history_up_fields[0], "0");
@@ -371,7 +371,7 @@ PROMPT='%# '
         .args(["-L", &server, "send-keys", "-t", "test:0.0", "Down"])
         .status()
         .unwrap();
-    dump_zle_state(&server);
+    dump_zle_state(&server, &state_dump);
     let history_down_state = fs::read_to_string(&state_dump).unwrap();
     let history_down_fields: Vec<_> = history_down_state.trim_end().split('|').collect();
     assert_eq!(history_down_fields[0], "0");
@@ -406,7 +406,7 @@ PROMPT='%# '
         .status()
         .unwrap();
     wait_for_pane(&server, "cargo release patch --execute");
-    dump_zle_state(&server);
+    dump_zle_state(&server, &state_dump);
     let history_priority_state = fs::read_to_string(&state_dump).unwrap();
     let history_priority_fields: Vec<_> = history_priority_state.trim_end().split('|').collect();
     assert_eq!(history_priority_fields[6], "cargo release patch --execute");
@@ -472,7 +472,7 @@ PROMPT='%# '
         .status()
         .unwrap();
     thread::sleep(Duration::from_millis(500));
-    dump_zle_state(&server);
+    dump_zle_state(&server, &state_dump);
     let typed_after_paste = fs::read_to_string(&state_dump).unwrap();
     let typed_after_paste_fields: Vec<_> = typed_after_paste.trim_end().split('|').collect();
     assert_eq!(
@@ -527,7 +527,7 @@ PROMPT='%# '
         .args(["-L", &server, "send-keys", "-t", "test:0.0", "BTab"])
         .status()
         .unwrap();
-    dump_zle_state(&server);
+    dump_zle_state(&server, &state_dump);
     let shifted_state = fs::read_to_string(&state_dump).unwrap();
     assert!(
         shifted_state.contains("|2|zsuggestion-native-fixture native/second/file"),
@@ -543,7 +543,7 @@ PROMPT='%# '
         .args(["-L", &server, "send-keys", "-l", "-t", "test:0.0", "i"])
         .status()
         .unwrap();
-    dump_zle_state(&server);
+    dump_zle_state(&server, &state_dump);
     let typed_state = fs::read_to_string(&state_dump).unwrap();
     assert!(
         typed_state.contains("|zsuggestion-native-fixture nati|zsuggestion-native-fixture nati|"),
@@ -612,7 +612,7 @@ PROMPT='%# '
     let mut follow_up_state = String::new();
     while Instant::now() < deadline {
         follow_up_capture = capture_pane(&server, false);
-        dump_zle_state(&server);
+        dump_zle_state(&server, &state_dump);
         follow_up_state = fs::read_to_string(&state_dump).unwrap();
         if follow_up_state.contains("next-value") {
             break;
@@ -646,7 +646,7 @@ PROMPT='%# '
         .args(["-L", &server, "send-keys", "-t", "test:0.0", "Tab"])
         .status()
         .unwrap();
-    dump_zle_state(&server);
+    dump_zle_state(&server, &state_dump);
     let ssh_user_state = fs::read_to_string(&state_dump).unwrap();
     assert!(
         ssh_user_state.contains("|ssh alice@|ssh alice@|example.com"),
@@ -680,7 +680,7 @@ PROMPT='%# '
             .args(["-L", &server, "send-keys", "-t", "test:0.0", "Tab"])
             .status()
             .unwrap();
-        dump_zle_state(&server);
+        dump_zle_state(&server, &state_dump);
         let remote_path_state = fs::read_to_string(&state_dump).unwrap();
         assert!(
             remote_path_state.contains(expected),
@@ -733,7 +733,7 @@ PROMPT='%# '
         scp_capture.matches("File").count() >= 2,
         "generic filesystem candidates were absent for scp:\n{scp_capture}"
     );
-    dump_zle_state(&server);
+    dump_zle_state(&server, &state_dump);
     let scp_before_tab = fs::read_to_string(&state_dump).unwrap();
     assert!(
         scp_before_tab.contains(&format!("|{scp_path_prefix}|{scp_path_prefix}|")),
@@ -744,7 +744,7 @@ PROMPT='%# '
         .status()
         .unwrap();
     thread::sleep(Duration::from_millis(50));
-    dump_zle_state(&server);
+    dump_zle_state(&server, &state_dump);
     let scp_after_tab = fs::read_to_string(&state_dump).unwrap();
     assert!(
         scp_after_tab.contains(&format!("|{scp_path_prefix}|{scp_path_prefix}|")),
@@ -759,7 +759,7 @@ PROMPT='%# '
         .args(["-L", &server, "send-keys", "-t", "test:0.0", "Tab"])
         .status()
         .unwrap();
-    dump_zle_state(&server);
+    dump_zle_state(&server, &state_dump);
     let scp_unique_path = fs::read_to_string(&state_dump).unwrap();
     assert!(
         scp_unique_path.contains(&format!(
@@ -786,7 +786,7 @@ PROMPT='%# '
         .args(["-L", &server, "send-keys", "-t", "test:0.0", "Tab"])
         .status()
         .unwrap();
-    dump_zle_state(&server);
+    dump_zle_state(&server, &state_dump);
     let common_path_state = fs::read_to_string(&state_dump).unwrap();
     let common_path_fields: Vec<_> = common_path_state.trim_end().split('|').collect();
     assert_eq!(common_path_fields[3], format!("{kitty_prefix}f"));
@@ -794,7 +794,7 @@ PROMPT='%# '
         .args(["-L", &server, "send-keys", "-t", "test:0.0", "Tab"])
         .status()
         .unwrap();
-    dump_zle_state(&server);
+    dump_zle_state(&server, &state_dump);
     let exact_path_state = fs::read_to_string(&state_dump).unwrap();
     let exact_path_fields: Vec<_> = exact_path_state.trim_end().split('|').collect();
     assert_eq!(exact_path_fields[3], format!("{kitty_prefix}f "));
@@ -945,7 +945,7 @@ PROMPT='%# '
         fuzzy_capture.contains("echo fuzzy-history-target"),
         "inline fuzzy history result was absent:\n{fuzzy_capture}"
     );
-    dump_zle_state(&server);
+    dump_zle_state(&server, &state_dump);
     let fuzzy_state = fs::read_to_string(&state_dump).unwrap();
     let fuzzy_fields: Vec<_> = fuzzy_state.trim_end().split('|').collect();
     assert_eq!(fuzzy_fields[3], "fzht");
@@ -970,7 +970,7 @@ PROMPT='%# '
         .args(["-L", &server, "send-keys", "-t", "test:0.0", "C-n"])
         .status()
         .unwrap();
-    dump_zle_state(&server);
+    dump_zle_state(&server, &state_dump);
     let scrolled_fuzzy_state = fs::read_to_string(&state_dump).unwrap();
     let scrolled_fuzzy_fields: Vec<_> = scrolled_fuzzy_state.trim_end().split('|').collect();
     assert_ne!(scrolled_fuzzy_fields[6], fuzzy_fields[6]);
@@ -982,7 +982,7 @@ PROMPT='%# '
     );
 
     fs::write(&escape_request, "").unwrap();
-    dump_zle_state(&server);
+    dump_zle_state(&server, &state_dump);
     let escaped_state = fs::read_to_string(&state_dump).unwrap();
     let escaped_fields: Vec<_> = escaped_state.trim_end().split('|').collect();
     assert_eq!(
@@ -1008,7 +1008,7 @@ PROMPT='%# '
         .args(["-L", &server, "send-keys", "-t", "test:0.0", "Tab"])
         .status()
         .unwrap();
-    dump_zle_state(&server);
+    dump_zle_state(&server, &state_dump);
     let accepted_fuzzy_state = fs::read_to_string(&state_dump).unwrap();
     let accepted_fields: Vec<_> = accepted_fuzzy_state.trim_end().split('|').collect();
     assert!(accepted_fields[3].starts_with("echo fuzzy-history-target"));
@@ -1060,7 +1060,7 @@ PROMPT='%# '
         ])
         .status()
         .unwrap();
-    dump_zle_state(&server);
+    dump_zle_state(&server, &state_dump);
     let first_interrupted_fuzzy = fs::read_to_string(&state_dump).unwrap();
     let first_interrupted_fields: Vec<_> = first_interrupted_fuzzy.trim_end().split('|').collect();
     assert_eq!(first_interrupted_fields[7], "1");
@@ -1084,14 +1084,14 @@ PROMPT='%# '
         ])
         .status()
         .unwrap();
-    dump_zle_state(&server);
+    dump_zle_state(&server, &state_dump);
     let second_fuzzy = fs::read_to_string(&state_dump).unwrap();
     let second_fuzzy_fields: Vec<_> = second_fuzzy.trim_end().split('|').collect();
     assert_eq!(second_fuzzy_fields[7], "1");
     assert_eq!(second_fuzzy_fields[8], "echo second");
     assert_eq!(second_fuzzy_fields[9], "fresh");
     fs::write(&escape_request, "").unwrap();
-    dump_zle_state(&server);
+    dump_zle_state(&server, &state_dump);
     let escaped_second_fuzzy = fs::read_to_string(&state_dump).unwrap();
     let escaped_second_fields: Vec<_> = escaped_second_fuzzy.trim_end().split('|').collect();
     assert_eq!(escaped_second_fields[3], "echo second");
@@ -1193,7 +1193,7 @@ PROMPT='%# '
         }
         thread::sleep(Duration::from_millis(50));
     }
-    dump_zle_state(&server);
+    dump_zle_state(&server, &state_dump);
     let preview_state = fs::read_to_string(&state_dump).unwrap();
     assert!(
         preview_capture.contains("preview-first-line") && preview_capture.contains("Preview:"),
@@ -1342,12 +1342,27 @@ PROMPT='%# '
     assert_eq!(cursor_x(&server, "test:ascii.0"), 5);
 }
 
-fn dump_zle_state(server: &str) {
-    Command::new("tmux")
-        .args(["-L", server, "send-keys", "-t", "test:0.0", "C-x", "C-d"])
-        .status()
-        .unwrap();
-    thread::sleep(Duration::from_millis(20));
+fn dump_zle_state(server: &str, state_dump: &Path) {
+    let before = fs::metadata(state_dump).and_then(|m| m.modified()).ok();
+    let deadline = Instant::now() + Duration::from_secs(4);
+    loop {
+        Command::new("tmux")
+            .args(["-L", server, "send-keys", "-t", "test:0.0", "C-x", "C-d"])
+            .status()
+            .unwrap();
+        for _ in 0..20 {
+            thread::sleep(Duration::from_millis(25));
+            let modified = fs::metadata(state_dump).and_then(|m| m.modified()).ok();
+            if modified.is_some() && modified != before && fs::read(state_dump).is_ok() {
+                return;
+            }
+        }
+        assert!(
+            Instant::now() < deadline,
+            "zle state dump never refreshed: {}",
+            state_dump.display()
+        );
+    }
 }
 
 fn wait_for_zle(server: &str, sync_file: &Path) {
