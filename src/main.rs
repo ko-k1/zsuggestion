@@ -1224,14 +1224,6 @@ if [[ -o interactive ]] && (( $+commands[zsuggestion] )); then
       else
         region_highlight+=("$kind_start $(( kind_start + kind_width )) fg=__ZSUGGESTION_UI_MUTED__ memo=zsuggestion")
       fi
-      if (( index != _ZSUGGESTION_MENU_INDEX )); then
-        local scroll_start=$(( line_start + ${#row} - 1 ))
-        if [[ "$scrollbar_char" == "$thumb" ]]; then
-          region_highlight+=("$scroll_start $(( scroll_start + 1 )) fg=__ZSUGGESTION_UI_ACCENT__,bold memo=zsuggestion")
-        else
-          region_highlight+=("$scroll_start $(( scroll_start + 1 )) fg=__ZSUGGESTION_UI_MUTED__ memo=zsuggestion")
-        fi
-      fi
     done
 
     if (( _ZSUGGESTION_FUZZY_ACTIVE )); then
