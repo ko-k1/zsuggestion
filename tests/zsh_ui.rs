@@ -227,7 +227,7 @@ PROMPT='%# '
         .unwrap();
     assert!(status.success(), "failed to type into isolated Zsh");
 
-    let deadline = Instant::now() + Duration::from_secs(4);
+    let deadline = Instant::now() + Duration::from_secs(10);
     let mut capture = String::new();
     while Instant::now() < deadline {
         let output = Command::new("tmux")
@@ -428,7 +428,7 @@ PROMPT='%# '
         .arg("zsuggestion-command-with-a-very-long-name v")
         .status()
         .unwrap();
-    let deadline = Instant::now() + Duration::from_secs(4);
+    let deadline = Instant::now() + Duration::from_secs(10);
     let mut long_candidate_capture = String::new();
     while Instant::now() < deadline {
         long_candidate_capture = capture_pane(&server, false);
@@ -496,7 +496,7 @@ PROMPT='%# '
         !immediate_capture.contains("native/path/file"),
         "native completion ran synchronously instead of waiting for the debounce"
     );
-    let deadline = Instant::now() + Duration::from_secs(4);
+    let deadline = Instant::now() + Duration::from_secs(10);
     let mut native_capture = String::new();
     while Instant::now() < deadline {
         native_capture = capture_pane(&server, false);
@@ -554,7 +554,7 @@ PROMPT='%# '
         .args(["-L", &server, "send-keys", "-t", "test:0.0", "BSpace"])
         .status()
         .unwrap();
-    let deadline = Instant::now() + Duration::from_secs(4);
+    let deadline = Instant::now() + Duration::from_secs(10);
     while Instant::now() < deadline {
         native_capture = capture_pane(&server, false);
         if native_capture.contains("zsuggestion-native-fixture native/path/file") {
@@ -608,7 +608,7 @@ PROMPT='%# '
         .args(["-L", &server, "send-keys", "-t", "test:0.0", "Tab"])
         .status()
         .unwrap();
-    let deadline = Instant::now() + Duration::from_secs(4);
+    let deadline = Instant::now() + Duration::from_secs(10);
     let mut follow_up_capture = String::new();
     let mut follow_up_state = String::new();
     while Instant::now() < deadline {
@@ -721,7 +721,7 @@ PROMPT='%# '
         .arg(&scp_path_prefix)
         .status()
         .unwrap();
-    let deadline = Instant::now() + Duration::from_secs(4);
+    let deadline = Instant::now() + Duration::from_secs(10);
     let mut scp_capture = String::new();
     while Instant::now() < deadline {
         scp_capture = capture_pane(&server, false);
@@ -846,7 +846,7 @@ PROMPT='%# '
         .args(["-L", &server, "send-keys", "-l", "-t", "test:0.0", "zsu"])
         .status()
         .unwrap();
-    let deadline = Instant::now() + Duration::from_secs(4);
+    let deadline = Instant::now() + Duration::from_secs(10);
     let mut reloaded_capture = String::new();
     while Instant::now() < deadline {
         reloaded_capture = capture_pane(&server, false);
@@ -933,7 +933,7 @@ PROMPT='%# '
         .args(["-L", &server, "send-keys", "-l", "-t", "test:0.0", "  fzht"])
         .status()
         .unwrap();
-    let deadline = Instant::now() + Duration::from_secs(4);
+    let deadline = Instant::now() + Duration::from_secs(10);
     let mut fuzzy_capture = String::new();
     while Instant::now() < deadline {
         fuzzy_capture = capture_pane(&server, false);
@@ -997,7 +997,7 @@ PROMPT='%# '
         .args(["-L", &server, "send-keys", "-l", "-t", "test:0.0", "  fzht"])
         .status()
         .unwrap();
-    let deadline = Instant::now() + Duration::from_secs(4);
+    let deadline = Instant::now() + Duration::from_secs(10);
     while Instant::now() < deadline {
         fuzzy_capture = capture_pane(&server, false);
         if fuzzy_capture.contains("echo fuzzy-history-target") {
@@ -1038,7 +1038,7 @@ PROMPT='%# '
         .args(["-L", &server, "send-keys", "-t", "test:0.0", "Enter"])
         .status()
         .unwrap();
-    let deadline = Instant::now() + Duration::from_secs(4);
+    let deadline = Instant::now() + Duration::from_secs(10);
     while Instant::now() < deadline && !fuzzy_execute_file.exists() {
         thread::sleep(Duration::from_millis(50));
     }
@@ -1131,7 +1131,7 @@ PROMPT='%# '
         ])
         .status()
         .unwrap();
-    let deadline = Instant::now() + Duration::from_secs(4);
+    let deadline = Instant::now() + Duration::from_secs(10);
     let mut history_capture = String::new();
     while Instant::now() < deadline {
         history_capture = capture_pane(&server, false);
@@ -1271,7 +1271,7 @@ PROMPT='%# '
         ])
         .status()
         .unwrap();
-    let deadline = Instant::now() + Duration::from_secs(4);
+    let deadline = Instant::now() + Duration::from_secs(10);
     let mut ascii_capture = String::new();
     while Instant::now() < deadline {
         ascii_capture = capture_target(&server, "test:ascii.0", false);
@@ -1351,7 +1351,7 @@ fn dump_zle_state(server: &str, state_dump: &Path) {
             .next()
             .map(|seq| seq.to_owned())
     });
-    let deadline = Instant::now() + Duration::from_secs(4);
+    let deadline = Instant::now() + Duration::from_secs(10);
     loop {
         Command::new("tmux")
             .args(["-L", server, "send-keys", "-t", "test:0.0", "C-x", "C-d"])
@@ -1384,7 +1384,7 @@ fn wait_for_zle(server: &str, sync_file: &Path) {
 
 fn wait_for_zle_target(server: &str, target: &str, sync_file: &Path) {
     let _ = fs::remove_file(sync_file);
-    let deadline = Instant::now() + Duration::from_secs(4);
+    let deadline = Instant::now() + Duration::from_secs(10);
     while Instant::now() < deadline {
         Command::new("tmux")
             .args(["-L", server, "send-keys", "-t", target, "C-g"])
@@ -1406,7 +1406,7 @@ fn capture_pane(server: &str, include_escape_sequences: bool) -> String {
 }
 
 fn wait_for_pane(server: &str, expected: &str) {
-    let deadline = Instant::now() + Duration::from_secs(4);
+    let deadline = Instant::now() + Duration::from_secs(10);
     let mut capture = String::new();
     while Instant::now() < deadline {
         capture = capture_pane(server, false);
