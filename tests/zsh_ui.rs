@@ -119,7 +119,7 @@ _zsuggestion_test_dump_state() {{
     command rm -f -- {escape_request}
     _zsuggestion_escape
   fi
-  print -r -- "$_ZSUGGESTION_MENU_ACTIVE|${{#_ZSUGGESTION_MENU_ACCEPTS}}|$_ZSUGGESTION_MENU_BUFFER|$BUFFER|${{_ZSUGGESTION_MENU_ACCEPTS[1]}}|$_ZSUGGESTION_MENU_INDEX|${{_ZSUGGESTION_MENU_DISPLAYS[$_ZSUGGESTION_MENU_INDEX]}}|$_ZSUGGESTION_FUZZY_ACTIVE|$_ZSUGGESTION_FUZZY_BASE|$_ZSUGGESTION_FUZZY_QUERY|$_ZSUGGESTION_PREVIEW_FD|$_ZSUGGESTION_PREVIEW_TICKS|$_ZSUGGESTION_PREVIEW_PATH|${{(j:;:)_ZSUGGESTION_PREVIEW_LINES}}|${{(j:;:)_ZSUGGESTION_MENU_DISPLAYS}}|${{POSTDISPLAY%%$'\n'*}}|${{(j:;:)_ZSUGGESTION_MENU_SOURCES}}|$_ZSUGGESTION_DUMP_SEQ" > {state_dump}
+  print -r -- "$_ZSUGGESTION_MENU_ACTIVE|${{#_ZSUGGESTION_MENU_ACCEPTS}}|$_ZSUGGESTION_MENU_BUFFER|$BUFFER|${{_ZSUGGESTION_MENU_ACCEPTS[1]}}|$_ZSUGGESTION_MENU_INDEX|${{_ZSUGGESTION_MENU_DISPLAYS[$_ZSUGGESTION_MENU_INDEX]}}|$_ZSUGGESTION_FUZZY_ACTIVE|$_ZSUGGESTION_FUZZY_BASE|$_ZSUGGESTION_FUZZY_QUERY|$_ZSUGGESTION_PREVIEW_FD|$_ZSUGGESTION_PREVIEW_TICKS|$_ZSUGGESTION_PREVIEW_PATH|${{(j:;:)_ZSUGGESTION_PREVIEW_LINES}}|${{(j:;:)_ZSUGGESTION_MENU_DISPLAYS}}|${{POSTDISPLAY%%$'\n'*}}|${{(j:;:)_ZSUGGESTION_MENU_SOURCES}}|$_ZSUGGESTION_DUMP_SEQ" > {state_dump}.new && command mv -f {state_dump}.new {state_dump}
 }}
 _zsuggestion_test_sync() {{
   : > {sync_file}
@@ -1344,13 +1344,15 @@ PROMPT='%# '
 }
 
 fn dump_zle_state(server: &str, state_dump: &Path) {
-    let before = fs::read_to_string(state_dump).ok().and_then(|content| {
-        content
-            .trim_end()
-            .rsplit('|')
-            .next()
-            .map(|seq| seq.to_owned())
-    });
+    let read_seq = |path: &Path| -> Option<String> {
+        let content = fs::read_to_string(path).ok()?;
+        let fields: Vec<&str> = content.trim_end().split('|').collect();
+        if fields.len() < 18 || fields[17].is_empty() {
+            return None;
+        }
+        Some(fields[17].to_owned())
+    };
+    let before = read_seq(state_dump);
     let deadline = Instant::now() + Duration::from_secs(10);
     loop {
         Command::new("tmux")
@@ -1359,13 +1361,7 @@ fn dump_zle_state(server: &str, state_dump: &Path) {
             .unwrap();
         for _ in 0..40 {
             thread::sleep(Duration::from_millis(25));
-            let current = fs::read_to_string(state_dump).ok().and_then(|content| {
-                content
-                    .trim_end()
-                    .rsplit('|')
-                    .next()
-                    .map(|seq| seq.to_owned())
-            });
+            let current = read_seq(state_dump);
             if current.is_some() && current != before {
                 return;
             }
