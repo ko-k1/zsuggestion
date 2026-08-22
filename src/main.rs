@@ -1078,7 +1078,7 @@ if [[ -o interactive ]] && (( $+commands[zsuggestion] )); then
         local compact_start=$(( ${#input} + ${#POSTDISPLAY} + 1 + compact_indent ))
         POSTDISPLAY+=$'\n'"${compact_padding}${row}"
         region_highlight+=("$compact_start $(( compact_start + ${#row} )) bg=__ZSUGGESTION_UI_SELECTED_BACKGROUND__,fg=__ZSUGGESTION_UI_SELECTED_TEXT__ memo=zsuggestion")
-        region_highlight+=("$compact_start $(( compact_start + 1 )) bg=__ZSUGGESTION_UI_SELECTED_BACKGROUND__,fg=__ZSUGGESTION_UI_ACCENT__,bold memo=zsuggestion")
+        region_highlight+=("$compact_start $(( compact_start + 2 )) bg=__ZSUGGESTION_UI_SELECTED_BACKGROUND__,fg=__ZSUGGESTION_UI_ACCENT__,bold memo=zsuggestion")
       fi
       _ZSUGGESTION_MENU_OWNS_DISPLAY=1
       return 0
@@ -1194,12 +1194,12 @@ if [[ -o interactive ]] && (( $+commands[zsuggestion] )); then
       line_start=$(( ${#input} + ${#POSTDISPLAY} + 1 + indent ))
       POSTDISPLAY+=$'\n'"${padding}${row}"
       if (( index == _ZSUGGESTION_MENU_INDEX )); then
-        region_highlight+=("$(( line_start + 1 )) $(( line_start + ${#row} - 1 )) bg=__ZSUGGESTION_UI_SELECTED_BACKGROUND__,fg=__ZSUGGESTION_UI_SELECTED_TEXT__ memo=zsuggestion")
-        region_highlight+=("$(( line_start + 1 )) $(( line_start + 3 )) bg=__ZSUGGESTION_UI_SELECTED_BACKGROUND__,fg=__ZSUGGESTION_UI_ACCENT__,bold memo=zsuggestion")
-        region_highlight+=("$(( line_start + 3 )) $(( line_start + 5 )) bg=__ZSUGGESTION_UI_SELECTED_BACKGROUND__,fg=__ZSUGGESTION_UI_ACCENT__ memo=zsuggestion")
+        region_highlight+=("$(( line_start )) $(( line_start + ${#row} - 1 )) bg=__ZSUGGESTION_UI_SELECTED_BACKGROUND__,fg=__ZSUGGESTION_UI_SELECTED_TEXT__ memo=zsuggestion")
+        region_highlight+=("$(( line_start )) $(( line_start + 2 )) bg=__ZSUGGESTION_UI_SELECTED_BACKGROUND__,fg=__ZSUGGESTION_UI_ACCENT__,bold memo=zsuggestion")
+        region_highlight+=("$(( line_start + 2 )) $(( line_start + 4 )) bg=__ZSUGGESTION_UI_SELECTED_BACKGROUND__,fg=__ZSUGGESTION_UI_ACCENT__ memo=zsuggestion")
       else
-        region_highlight+=("$(( line_start + 1 )) $(( line_start + ${#row} - 1 )) fg=__ZSUGGESTION_UI_TEXT__ memo=zsuggestion")
-        region_highlight+=("$(( line_start + 1 )) $(( line_start + 5 )) fg=__ZSUGGESTION_UI_MUTED__ memo=zsuggestion")
+        region_highlight+=("$(( line_start )) $(( line_start + ${#row} - 1 )) fg=__ZSUGGESTION_UI_TEXT__ memo=zsuggestion")
+        region_highlight+=("$(( line_start )) $(( line_start + 4 )) fg=__ZSUGGESTION_UI_MUTED__ memo=zsuggestion")
       fi
 
       local match_length=0
@@ -1207,12 +1207,12 @@ if [[ -o interactive ]] && (( $+commands[zsuggestion] )); then
       (( match_length > title_width )) && match_length=$title_width
       if (( match_length > 0 )); then
         if (( index == _ZSUGGESTION_MENU_INDEX )); then
-          region_highlight+=("$(( line_start + 5 )) $(( line_start + 5 + match_length )) bg=__ZSUGGESTION_UI_SELECTED_BACKGROUND__,fg=__ZSUGGESTION_UI_SELECTED_TEXT__,bold memo=zsuggestion")
+          region_highlight+=("$(( line_start + 4 )) $(( line_start + 4 + match_length )) bg=__ZSUGGESTION_UI_SELECTED_BACKGROUND__,fg=__ZSUGGESTION_UI_SELECTED_TEXT__,bold memo=zsuggestion")
         else
-          region_highlight+=("$(( line_start + 5 )) $(( line_start + 5 + match_length )) fg=__ZSUGGESTION_UI_SELECTED_TEXT__,bold memo=zsuggestion")
+          region_highlight+=("$(( line_start + 4 )) $(( line_start + 4 + match_length )) fg=__ZSUGGESTION_UI_SELECTED_TEXT__,bold memo=zsuggestion")
         fi
       fi
-      local description_start=$(( line_start + 6 + title_width ))
+      local description_start=$(( line_start + 5 + title_width ))
       if (( index == _ZSUGGESTION_MENU_INDEX )); then
         region_highlight+=("$description_start $(( description_start + description_width )) bg=__ZSUGGESTION_UI_SELECTED_BACKGROUND__,fg=__ZSUGGESTION_UI_SELECTED_SOURCE__ memo=zsuggestion")
       else
