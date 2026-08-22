@@ -1344,15 +1344,13 @@ PROMPT='%# '
 }
 
 fn dump_zle_state(server: &str, state_dump: &Path) {
-    let before = fs::read_to_string(state_dump)
-        .ok()
-        .and_then(|content| {
-            content
-                .trim_end()
-                .rsplit('|')
-                .next()
-                .map(|seq| seq.to_owned())
-        });
+    let before = fs::read_to_string(state_dump).ok().and_then(|content| {
+        content
+            .trim_end()
+            .rsplit('|')
+            .next()
+            .map(|seq| seq.to_owned())
+    });
     let deadline = Instant::now() + Duration::from_secs(4);
     loop {
         Command::new("tmux")
@@ -1361,15 +1359,13 @@ fn dump_zle_state(server: &str, state_dump: &Path) {
             .unwrap();
         for _ in 0..40 {
             thread::sleep(Duration::from_millis(25));
-            let current = fs::read_to_string(state_dump)
-                .ok()
-                .and_then(|content| {
-                    content
-                        .trim_end()
-                        .rsplit('|')
-                        .next()
-                        .map(|seq| seq.to_owned())
-                });
+            let current = fs::read_to_string(state_dump).ok().and_then(|content| {
+                content
+                    .trim_end()
+                    .rsplit('|')
+                    .next()
+                    .map(|seq| seq.to_owned())
+            });
             if current.is_some() && current != before {
                 return;
             }
