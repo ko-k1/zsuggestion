@@ -1202,6 +1202,7 @@ if [[ -o interactive ]] && (( $+commands[zsuggestion] )); then
         region_highlight+=("$(( line_start )) $(( line_start + 4 )) fg=__ZSUGGESTION_UI_MUTED__ memo=zsuggestion")
       fi
       region_highlight+=("$(( line_start + ${#row} - 1 )) $(( line_start + ${#row} )) fg=__ZSUGGESTION_UI_MUTED__ memo=zsuggestion")
+      [[ "$scrollbar_char" == "$thumb" ]] && region_highlight+=("$(( line_start + ${#row} - 1 )) $(( line_start + ${#row} )) fg=__ZSUGGESTION_UI_SELECTED_TEXT__ memo=zsuggestion")
 
       local match_length=0
       (( ! _ZSUGGESTION_FUZZY_ACTIVE && ! display_truncated )) && match_length=${#input}
