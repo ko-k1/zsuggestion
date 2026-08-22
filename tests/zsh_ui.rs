@@ -114,11 +114,12 @@ compdef _zsuggestion_test_long zsuggestion-command-with-a-very-long-name
 alias ls=eza
 eval "$({binary} init zsh)"
 _zsuggestion_test_dump_state() {{
+  _ZSUGGESTION_DUMP_SEQ=$(( ${{_ZSUGGESTION_DUMP_SEQ:-0}} + 1 ))
   if [[ -e {escape_request} ]]; then
     command rm -f -- {escape_request}
     _zsuggestion_escape
   fi
-  print -r -- "$_ZSUGGESTION_MENU_ACTIVE|${{#_ZSUGGESTION_MENU_ACCEPTS}}|$_ZSUGGESTION_MENU_BUFFER|$BUFFER|${{_ZSUGGESTION_MENU_ACCEPTS[1]}}|$_ZSUGGESTION_MENU_INDEX|${{_ZSUGGESTION_MENU_DISPLAYS[$_ZSUGGESTION_MENU_INDEX]}}|$_ZSUGGESTION_FUZZY_ACTIVE|$_ZSUGGESTION_FUZZY_BASE|$_ZSUGGESTION_FUZZY_QUERY|$_ZSUGGESTION_PREVIEW_FD|$_ZSUGGESTION_PREVIEW_TICKS|$_ZSUGGESTION_PREVIEW_PATH|${{(j:;:)_ZSUGGESTION_PREVIEW_LINES}}|${{(j:;:)_ZSUGGESTION_MENU_DISPLAYS}}|${{POSTDISPLAY%%$'\n'*}}|${{(j:;:)_ZSUGGESTION_MENU_SOURCES}}" > {state_dump}
+  print -r -- "$_ZSUGGESTION_MENU_ACTIVE|${{#_ZSUGGESTION_MENU_ACCEPTS}}|$_ZSUGGESTION_MENU_BUFFER|$BUFFER|${{_ZSUGGESTION_MENU_ACCEPTS[1]}}|$_ZSUGGESTION_MENU_INDEX|${{_ZSUGGESTION_MENU_DISPLAYS[$_ZSUGGESTION_MENU_INDEX]}}|$_ZSUGGESTION_FUZZY_ACTIVE|$_ZSUGGESTION_FUZZY_BASE|$_ZSUGGESTION_FUZZY_QUERY|$_ZSUGGESTION_PREVIEW_FD|$_ZSUGGESTION_PREVIEW_TICKS|$_ZSUGGESTION_PREVIEW_PATH|${{(j:;:)_ZSUGGESTION_PREVIEW_LINES}}|${{(j:;:)_ZSUGGESTION_MENU_DISPLAYS}}|${{POSTDISPLAY%%$'\n'*}}|${{(j:;:)_ZSUGGESTION_MENU_SOURCES}}|$_ZSUGGESTION_DUMP_SEQ" > {state_dump}
 }}
 _zsuggestion_test_sync() {{
   : > {sync_file}
@@ -1343,17 +1344,33 @@ PROMPT='%# '
 }
 
 fn dump_zle_state(server: &str, state_dump: &Path) {
-    let before = fs::metadata(state_dump).and_then(|m| m.modified()).ok();
+    let before = fs::read_to_string(state_dump)
+        .ok()
+        .and_then(|content| {
+            content
+                .trim_end()
+                .rsplit('|')
+                .next()
+                .map(|seq| seq.to_owned())
+        });
     let deadline = Instant::now() + Duration::from_secs(4);
     loop {
         Command::new("tmux")
             .args(["-L", server, "send-keys", "-t", "test:0.0", "C-x", "C-d"])
             .status()
             .unwrap();
-        for _ in 0..20 {
+        for _ in 0..40 {
             thread::sleep(Duration::from_millis(25));
-            let modified = fs::metadata(state_dump).and_then(|m| m.modified()).ok();
-            if modified.is_some() && modified != before && fs::read(state_dump).is_ok() {
+            let current = fs::read_to_string(state_dump)
+                .ok()
+                .and_then(|content| {
+                    content
+                        .trim_end()
+                        .rsplit('|')
+                        .next()
+                        .map(|seq| seq.to_owned())
+                });
+            if current.is_some() && current != before {
                 return;
             }
         }
