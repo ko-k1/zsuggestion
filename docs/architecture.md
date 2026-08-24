@@ -61,7 +61,12 @@ Providers are queried in strict order:
 5. Append-safe candidates from the active Zsh completion system.
 6. No result.
 
-Lower tiers may fill unused menu capacity but never outrank a higher tier. No
+Query order decides which providers contribute, but the rendered menu is
+re-sorted into presentation tiers before display: installed commands first,
+then directories and files, then per-command options, subcommands, and values,
+then remaining native Zsh candidates, with recorded history always last so
+personal history never buries fresh command content. Rows within a tier keep
+their provider query order. No
 broad command-intent model is in the interactive path.
 
 ## Conservative Editing

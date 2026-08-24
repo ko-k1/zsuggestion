@@ -10,8 +10,9 @@ native Zsh candidates, and full one-keystroke acceptance via Tab.
 
 ## Principles
 
-- Suggestions for installed commands outrank everything else; recorded history
-  refines the menu instead of dominating it.
+- Suggestions for installed commands and directories come first; per-command
+  flags, subcommands, and values follow, and recorded history always sinks to
+  the bottom of the menu.
 - Candidate providers are ordered tiers; lower tiers fill unused menu capacity
   but never outrank higher-confidence results.
 - The menu appears while typing and highlights the highest-ranked candidate.
@@ -105,12 +106,13 @@ zsuggestion owns ZLE's suggestion display. Do not load a second autosuggestion
 plugin alongside it; competing `POSTDISPLAY` highlights can recolor or stale
 the menu.
 
-Candidates are ranked in tiers. Structured option, subcommand, and value
-completions parsed from command metadata come first, followed by the cached
-inventory of installed commands. Recorded history fills the capacity those
-command suggestions leave unused, explicit filesystem matches follow it and
-remain stable while native results arrive, and asynchronous native Zsh
-candidates close the menu. Duplicate displays are removed.
+Candidates are ranked in tiers. Installed commands come first, followed by
+directory and file matches, then structured option, subcommand, and value
+completions parsed from command metadata, then other native Zsh candidates.
+Recorded history always sinks to the bottom of the menu regardless of which
+tiers produced results. Explicit filesystem matches remain stable while native
+results arrive, duplicate displays are removed, and equal-rank rows keep their
+provider order.
 At every argument position zsuggestion offers bounded
 local filesystem matches, so path completion does not depend on a
 command-specific completion function. Root-command flags parsed from man pages

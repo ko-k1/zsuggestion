@@ -406,11 +406,32 @@ PROMPT='%# '
         .arg("cargo release patch ")
         .status()
         .unwrap();
-    wait_for_pane(&server, "cargo release patch --execute");
-    dump_zle_state(&server, &state_dump);
-    let history_priority_state = fs::read_to_string(&state_dump).unwrap();
+    let deadline = Instant::now() + Duration::from_secs(10);
+    let history_priority_state = loop {
+        assert!(
+            Instant::now() < deadline,
+            "history priority menu never appeared:\n{}",
+            capture_pane(&server, false)
+        );
+        dump_zle_state(&server, &state_dump);
+        let state = fs::read_to_string(&state_dump).unwrap();
+        let fields: Vec<_> = state.trim_end().split('|').collect();
+        if fields[0] == "1"
+            && fields[14]
+                .split(';')
+                .any(|display| display == "cargo release patch --execute")
+        {
+            break state;
+        }
+        thread::sleep(Duration::from_millis(50));
+    };
     let history_priority_fields: Vec<_> = history_priority_state.trim_end().split('|').collect();
-    assert_eq!(history_priority_fields[6], "cargo release patch --execute");
+    let priority_sources: Vec<_> = history_priority_fields[16].split(';').collect();
+    assert_eq!(
+        priority_sources.last().copied(),
+        Some("history"),
+        "recorded history is no longer the bottom tier: {history_priority_state:?}"
+    );
     assert!(
         history_priority_fields[16]
             .split(';')

@@ -1444,6 +1444,17 @@ if [[ -o interactive ]] && (( $+commands[zsuggestion] )); then
     _ZSUGGESTION_NATIVE_DESCRIPTIONS=()
   }
 
+  _zsuggestion_candidate_rank() {
+    case "$1" in
+      command) REPLY=0 ;;
+      directory) REPLY=1 ;;
+      file) REPLY=2 ;;
+      option | subcommand | value) REPLY=3 ;;
+      history) REPLY=5 ;;
+      *) REPLY=4 ;;
+    esac
+  }
+
   _zsuggestion_menu_publish() {
     local index display
     local -a redraw_hooks apply_hooks
@@ -1477,6 +1488,47 @@ if [[ -o interactive ]] && (( $+commands[zsuggestion] )); then
         (( ${#_ZSUGGESTION_MENU_ACCEPTS} >= limit )) && break
       done
     fi
+
+    if (( ${#_ZSUGGESTION_MENU_ACCEPTS} > 1 )); then
+      local -a ranks perm sorted_accepts sorted_displays sorted_descriptions sorted_kinds sorted_sources
+      integer rank_index inner_index moving moving_rank other other_rank
+      ranks=()
+      for (( rank_index = 1; rank_index <= ${#_ZSUGGESTION_MENU_KINDS}; rank_index++ )); do
+        _zsuggestion_candidate_rank \
+          "${_ZSUGGESTION_MENU_KINDS[$rank_index]}" \
+          "${_ZSUGGESTION_MENU_SOURCES[$rank_index]}"
+        ranks+=("$REPLY")
+      done
+      perm=()
+      for (( rank_index = 1; rank_index <= ${#ranks}; rank_index++ )); do
+        perm+=("$rank_index")
+      done
+      for (( rank_index = 2; rank_index <= ${#perm}; rank_index++ )); do
+        moving="${perm[$rank_index]}"
+        moving_rank="${ranks[$moving]}"
+        for (( inner_index = rank_index - 1; inner_index >= 1; inner_index-- )); do
+          other="${perm[$inner_index]}"
+          other_rank="${ranks[$other]}"
+          (( other_rank <= moving_rank )) && break
+          perm[inner_index+1]="$other"
+        done
+        perm[inner_index+1]="$moving"
+      done
+      for (( rank_index = 1; rank_index <= ${#perm}; rank_index++ )); do
+        other="${perm[$rank_index]}"
+        sorted_accepts+=("${_ZSUGGESTION_MENU_ACCEPTS[$other]}")
+        sorted_displays+=("${_ZSUGGESTION_MENU_DISPLAYS[$other]}")
+        sorted_descriptions+=("${_ZSUGGESTION_MENU_DESCRIPTIONS[$other]}")
+        sorted_kinds+=("${_ZSUGGESTION_MENU_KINDS[$other]}")
+        sorted_sources+=("${_ZSUGGESTION_MENU_SOURCES[$other]}")
+      done
+      _ZSUGGESTION_MENU_ACCEPTS=("${sorted_accepts[@]}")
+      _ZSUGGESTION_MENU_DISPLAYS=("${sorted_displays[@]}")
+      _ZSUGGESTION_MENU_DESCRIPTIONS=("${sorted_descriptions[@]}")
+      _ZSUGGESTION_MENU_KINDS=("${sorted_kinds[@]}")
+      _ZSUGGESTION_MENU_SOURCES=("${sorted_sources[@]}")
+    fi
+
 
     _ZSUGGESTION_MENU_RESTORE_INDEX=$_ZSUGGESTION_MENU_INDEX
     zstyle -a zle-line-pre-redraw widgets redraw_hooks
