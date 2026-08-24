@@ -1657,7 +1657,7 @@ if [[ -o interactive ]] && (( $+commands[zsuggestion] )); then
       local -a accepts displays descriptions
 
       compadd() {
-        local argument status current_prefix="$PREFIX"
+        local argument capture_rc current_prefix="$PREFIX"
         local added_prefix="" hidden_prefix="" ignored_prefix=""
         local added_suffix="" hidden_suffix="" ignored_suffix=""
         local index=1
@@ -1722,8 +1722,8 @@ if [[ -o interactive ]] && (( $+commands[zsuggestion] )); then
         fi
 
         builtin compadd "$@"
-        status=$?
-        return status
+        capture_rc=$?
+        return "$capture_rc"
       }
 
       _main_complete >/dev/null 2>&1
