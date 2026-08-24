@@ -858,6 +858,7 @@ if [[ -o interactive ]] && (( $+commands[zsuggestion] )); then
       [[ -n "$path" ]] || return
       [[ "$path" == "~/"* ]] && path="$HOME/${path#\~/}"
       _ZSUGGESTION_PREVIEW_PATH="$path"
+      _zsuggestion_menu_start_ticker
     fi
   }
 
@@ -1552,6 +1553,7 @@ if [[ -o interactive ]] && (( $+commands[zsuggestion] )); then
     _ZSUGGESTION_MENU_REQUEST_DIRTY=1
     _ZSUGGESTION_NATIVE_REQUESTED=0
     _ZSUGGESTION_NATIVE_START_TICKS=0
+    _zsuggestion_menu_start_ticker
     _ZSUGGESTION_DAEMON_ACCEPTS=()
     _ZSUGGESTION_DAEMON_DISPLAYS=()
     _ZSUGGESTION_DAEMON_DESCRIPTIONS=()
@@ -1659,6 +1661,7 @@ if [[ -o interactive ]] && (( $+commands[zsuggestion] )); then
     _ZSUGGESTION_DAEMON_KINDS=("${kinds[@]}")
     _ZSUGGESTION_DAEMON_SOURCES=("${sources[@]}")
     (( any_pending )) && _ZSUGGESTION_MENU_REFRESH_TICKS=5 || _ZSUGGESTION_MENU_REFRESH_TICKS=0
+    (( _ZSUGGESTION_MENU_REFRESH_TICKS > 0 )) && _zsuggestion_menu_start_ticker
     if (( ! _ZSUGGESTION_FUZZY_ACTIVE && ${#accepts} == 0 &&
           ! _ZSUGGESTION_MENU_ACTIVE )); then
       _ZSUGGESTION_NATIVE_ACCEPTS=()
@@ -1812,11 +1815,16 @@ if [[ -o interactive ]] && (( $+commands[zsuggestion] )); then
     local -a rendered_highlights
     if (( ${#_ZSUGGESTION_MENU_ACCEPTS} == 0 )); then
       _ZSUGGESTION_MENU_ACTIVE=0
+      if (( _ZSUGGESTION_MENU_KEYTIMEOUT >= 0 )); then
+        KEYTIMEOUT=$_ZSUGGESTION_MENU_KEYTIMEOUT
+        _ZSUGGESTION_MENU_KEYTIMEOUT=-1
+      fi
       region_highlight=( "${_ZSUGGESTION_FOREIGN_HIGHLIGHTS[@]}" )
       if (( _ZSUGGESTION_FUZZY_ACTIVE )); then
         _zsuggestion_menu_render
       else
         POSTDISPLAY=""
+        zle -R
       fi
       rendered_highlights=( "${region_highlight[@]}" )
       _ZSUGGESTION_RENDERED_HIGHLIGHTS=( "${rendered_highlights[@]}" )
@@ -1871,6 +1879,18 @@ if [[ -o interactive ]] && (( $+commands[zsuggestion] )); then
       exec {fd}<&-
       _ZSUGGESTION_MENU_TICK_FD=-1
     fi
+  }
+
+  _zsuggestion_menu_idle_stop() {
+    (( _ZSUGGESTION_MENU_TICK_FD >= 0 )) || return 0
+    [[ -n "$_ZSUGGESTION_PREVIEW_PATH" || -n "$_ZSUGGESTION_PREVIEW_COMMAND" ]] && return 0
+    (( _ZSUGGESTION_NATIVE_REQUEST_FD >= 0 )) && return 0
+    if (( ! _ZSUGGESTION_NATIVE_REQUESTED )) && [[ -n "$_ZSUGGESTION_MENU_REQUEST_BUFFER" ]]; then
+      return 0
+    fi
+    (( _ZSUGGESTION_MENU_REQUEST_DIRTY )) && return 0
+    (( _ZSUGGESTION_MENU_REFRESH_TICKS > 0 )) && return 0
+    _zsuggestion_menu_stop_ticker
   }
 
   _zsuggestion_menu_tick() {
@@ -1930,10 +1950,14 @@ if [[ -o interactive ]] && (( $+commands[zsuggestion] )); then
       fi
     fi
     if (( ! _ZSUGGESTION_MENU_REQUEST_DIRTY )); then
-      (( _ZSUGGESTION_MENU_REFRESH_TICKS > 0 )) || return 0
-      (( _ZSUGGESTION_MENU_REFRESH_TICKS-- ))
-      (( _ZSUGGESTION_MENU_REFRESH_TICKS == 0 )) || return 0
-      _ZSUGGESTION_MENU_REQUEST_DIRTY=1
+      if (( _ZSUGGESTION_MENU_REFRESH_TICKS > 0 )); then
+        (( _ZSUGGESTION_MENU_REFRESH_TICKS-- ))
+        (( _ZSUGGESTION_MENU_REFRESH_TICKS == 0 )) || return 0
+        _ZSUGGESTION_MENU_REQUEST_DIRTY=1
+      else
+        _zsuggestion_menu_idle_stop
+        return 0
+      fi
     fi
 
     _ZSUGGESTION_MENU_REQUEST_DIRTY=0
@@ -1962,6 +1986,8 @@ if [[ -o interactive ]] && (( $+commands[zsuggestion] )); then
     fi
     _ZSUGGESTION_MENU_REQUEST_FD="$query_fd"
     zle -F "$query_fd" _zsuggestion_menu_request_ready
+    _zsuggestion_menu_idle_stop
+    return 0
   }
 
   _zsuggestion_menu_line_init() {
@@ -2148,7 +2174,7 @@ if [[ -o interactive ]] && (( $+commands[zsuggestion] )); then
       zle -R
       return
     fi
-    if (( _ZSUGGESTION_MENU_ACTIVE )); then
+    if (( _ZSUGGESTION_MENU_ACTIVE || _ZSUGGESTION_MENU_OWNS_DISPLAY )); then
       _zsuggestion_menu_clear 1
       POSTDISPLAY=""
       region_highlight=( "${_ZSUGGESTION_FOREIGN_HIGHLIGHTS[@]}" )
