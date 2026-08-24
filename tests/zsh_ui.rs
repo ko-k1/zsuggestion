@@ -1295,19 +1295,7 @@ PROMPT='%# '
         .unwrap();
     thread::sleep(Duration::from_millis(50));
     assert_eq!(cursor_x(&server, "test:ascii.0"), 4);
-    Command::new("tmux")
-        .args([
-            "-L",
-            &server,
-            "send-keys",
-            "-t",
-            "test:ascii.0",
-            "C-x",
-            "C-d",
-        ])
-        .status()
-        .unwrap();
-    thread::sleep(Duration::from_millis(20));
+    dump_zle_state_target(&server, "test:ascii.0", &state_dump);
     let ascii_state = fs::read_to_string(&state_dump).unwrap();
     let ascii_fields: Vec<_> = ascii_state.trim_end().split('|').collect();
     assert_eq!(ascii_fields[3], "zs");
@@ -1344,6 +1332,10 @@ PROMPT='%# '
 }
 
 fn dump_zle_state(server: &str, state_dump: &Path) {
+    dump_zle_state_target(server, "test:0.0", state_dump);
+}
+
+fn dump_zle_state_target(server: &str, target: &str, state_dump: &Path) {
     let read_seq = |path: &Path| -> Option<String> {
         let content = fs::read_to_string(path).ok()?;
         let fields: Vec<&str> = content.trim_end().split('|').collect();
@@ -1356,7 +1348,7 @@ fn dump_zle_state(server: &str, state_dump: &Path) {
     let deadline = Instant::now() + Duration::from_secs(10);
     loop {
         Command::new("tmux")
-            .args(["-L", server, "send-keys", "-t", "test:0.0", "C-x", "C-d"])
+            .args(["-L", server, "send-keys", "-t", target, "C-x", "C-d"])
             .status()
             .unwrap();
         for _ in 0..40 {
