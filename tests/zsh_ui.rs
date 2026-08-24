@@ -748,7 +748,6 @@ PROMPT='%# '
         .status()
         .unwrap();
     let deadline = Instant::now() + Duration::from_secs(10);
-    let mut unique_state = String::new();
     loop {
         assert!(
             Instant::now() < deadline,
@@ -756,7 +755,7 @@ PROMPT='%# '
             capture_pane(&server, false)
         );
         dump_zle_state(&server, &state_dump);
-        unique_state = fs::read_to_string(&state_dump).unwrap();
+        let unique_state = fs::read_to_string(&state_dump).unwrap();
         let unique_fields: Vec<_> = unique_state.trim_end().split('|').collect();
         if unique_fields[1].parse::<usize>().map(|c| c >= 1) == Ok(true) {
             break;
