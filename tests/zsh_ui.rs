@@ -570,44 +570,27 @@ PROMPT='%# '
         .args(["-L", &server, "send-keys", "-t", "test:0.0", "C-n"])
         .status()
         .unwrap();
+    dump_zle_state(&server, &state_dump);
+    let before_fill_state = fs::read_to_string(&state_dump).unwrap();
+    let before_fill_fields: Vec<_> = before_fill_state.trim_end().split('|').collect();
+    let selected_index: usize = before_fill_fields[5].parse().unwrap();
+    let selected_display = before_fill_fields[14]
+        .split(';')
+        .nth(selected_index - 1)
+        .unwrap()
+        .to_owned();
     Command::new("tmux")
         .args(["-L", &server, "send-keys", "-t", "test:0.0", "Tab"])
         .status()
         .unwrap();
-    Command::new("tmux")
-        .args(["-L", &server, "send-keys", "-t", "test:0.0", "C-x", "C-d"])
-        .status()
-        .unwrap();
-    thread::sleep(Duration::from_millis(20));
-    let segment_capture = capture_pane(&server, false);
+    dump_zle_state(&server, &state_dump);
     let state_after_tab = fs::read_to_string(&state_dump).unwrap();
-    assert!(
-        state_after_tab.contains(
-            "|zsuggestion-native-fixture native/|zsuggestion-native-fixture native/|path/file"
-        ) && state_after_tab.contains("|1|zsuggestion-native-fixture native/path/file"),
-        "Tab did not accept the next path segment and reset selection; state was {state_after_tab:?}:\n{segment_capture}"
+    let after_tab_fields: Vec<_> = state_after_tab.trim_end().split('|').collect();
+    assert_eq!(
+        after_tab_fields[3],
+        format!("{selected_display} "),
+        "Tab did not fill the selected candidate; state was {state_after_tab:?}"
     );
-    Command::new("tmux")
-        .args(["-L", &server, "send-keys", "-t", "test:0.0", "Tab"])
-        .status()
-        .unwrap();
-    Command::new("tmux")
-        .args(["-L", &server, "send-keys", "-t", "test:0.0", "C-x", "C-d"])
-        .status()
-        .unwrap();
-    thread::sleep(Duration::from_millis(20));
-    let second_segment_capture = capture_pane(&server, false);
-    let state_after_second_tab = fs::read_to_string(&state_dump).unwrap();
-    assert!(
-        state_after_second_tab.contains(
-            "|zsuggestion-native-fixture native/path/|zsuggestion-native-fixture native/path/|file"
-        ),
-        "a repeated Tab did not accept the next path segment; state was {state_after_second_tab:?}:\n{second_segment_capture}"
-    );
-    Command::new("tmux")
-        .args(["-L", &server, "send-keys", "-t", "test:0.0", "Tab"])
-        .status()
-        .unwrap();
     let deadline = Instant::now() + Duration::from_secs(10);
     let mut follow_up_capture = String::new();
     let mut follow_up_state = String::new();
@@ -649,9 +632,10 @@ PROMPT='%# '
         .unwrap();
     dump_zle_state(&server, &state_dump);
     let ssh_user_state = fs::read_to_string(&state_dump).unwrap();
-    assert!(
-        ssh_user_state.contains("|ssh alice@|ssh alice@|example.com"),
-        "Tab did not stop after the SSH user boundary: {ssh_user_state:?}"
+    let ssh_fields: Vec<_> = ssh_user_state.trim_end().split('|').collect();
+    assert_eq!(
+        ssh_fields[3], "ssh alice@example.com ",
+        "Tab did not fill the SSH candidate: {ssh_user_state:?}"
     );
 
     Command::new("tmux")
@@ -672,22 +656,17 @@ PROMPT='%# '
         .status()
         .unwrap();
     wait_for_pane(&server, "scp zzuser@example.com:/srv/app/file");
-    for expected in [
-        "|scp zzuser@|scp zzuser@|example.com:/srv/app/file",
-        "|scp zzuser@example.com:/|scp zzuser@example.com:/|srv/app/file",
-        "|scp zzuser@example.com:/srv/|scp zzuser@example.com:/srv/|app/file",
-    ] {
-        Command::new("tmux")
-            .args(["-L", &server, "send-keys", "-t", "test:0.0", "Tab"])
-            .status()
-            .unwrap();
-        dump_zle_state(&server, &state_dump);
-        let remote_path_state = fs::read_to_string(&state_dump).unwrap();
-        assert!(
-            remote_path_state.contains(expected),
-            "Tab did not stop at remote path boundary {expected:?}: {remote_path_state:?}"
-        );
-    }
+    Command::new("tmux")
+        .args(["-L", &server, "send-keys", "-t", "test:0.0", "Tab"])
+        .status()
+        .unwrap();
+    dump_zle_state(&server, &state_dump);
+    let remote_path_state = fs::read_to_string(&state_dump).unwrap();
+    let remote_fields: Vec<_> = remote_path_state.trim_end().split('|').collect();
+    assert_eq!(
+        remote_fields[3], "scp zzuser@example.com:/srv/app/file ",
+        "Tab did not fill the remote destination candidate: {remote_path_state:?}"
+    );
 
     Command::new("tmux")
         .args(["-L", &server, "send-keys", "-t", "test:0.0", "C-c"])
@@ -744,18 +723,46 @@ PROMPT='%# '
         .args(["-L", &server, "send-keys", "-t", "test:0.0", "Tab"])
         .status()
         .unwrap();
-    thread::sleep(Duration::from_millis(50));
     dump_zle_state(&server, &state_dump);
     let scp_after_tab = fs::read_to_string(&state_dump).unwrap();
+    let scp_after_fields: Vec<_> = scp_after_tab.trim_end().split('|').collect();
+    let scp_selected: usize = scp_after_fields[5].parse().unwrap();
+    assert_ne!(scp_selected, 0, "menu was not active after the fill");
     assert!(
-        scp_after_tab.contains(&format!("|{scp_path_prefix}|{scp_path_prefix}|")),
-        "ambiguous path Tab selected an arbitrary file: {scp_after_tab:?}"
+        scp_after_fields[3].starts_with(&scp_path_prefix),
+        "ambiguous path Tab did not fill the selected row: {scp_after_tab:?}"
     );
+
+    Command::new("tmux")
+        .args(["-L", &server, "send-keys", "-t", "test:0.0", "C-c"])
+        .status()
+        .unwrap();
+    wait_for_zle(&server, &sync_file);
+    Command::new("tmux")
+        .args(["-L", &server, "send-keys", "-l", "-t", "test:0.0"])
+        .arg(&scp_path_prefix)
+        .status()
+        .unwrap();
     Command::new("tmux")
         .args(["-L", &server, "send-keys", "-l", "-t", "test:0.0", "a"])
         .status()
         .unwrap();
-    thread::sleep(Duration::from_millis(100));
+    let deadline = Instant::now() + Duration::from_secs(10);
+    let mut unique_state = String::new();
+    loop {
+        assert!(
+            Instant::now() < deadline,
+            "narrowed filesystem candidate was absent:\n{}",
+            capture_pane(&server, false)
+        );
+        dump_zle_state(&server, &state_dump);
+        unique_state = fs::read_to_string(&state_dump).unwrap();
+        let unique_fields: Vec<_> = unique_state.trim_end().split('|').collect();
+        if unique_fields[1].parse::<usize>().map(|c| c >= 1) == Ok(true) {
+            break;
+        }
+        thread::sleep(Duration::from_millis(50));
+    }
     Command::new("tmux")
         .args(["-L", &server, "send-keys", "-t", "test:0.0", "Tab"])
         .status()
@@ -783,14 +790,15 @@ PROMPT='%# '
         .status()
         .unwrap();
     wait_for_pane(&server, "f.bak");
-    Command::new("tmux")
-        .args(["-L", &server, "send-keys", "-t", "test:0.0", "Tab"])
-        .status()
-        .unwrap();
     dump_zle_state(&server, &state_dump);
-    let common_path_state = fs::read_to_string(&state_dump).unwrap();
-    let common_path_fields: Vec<_> = common_path_state.trim_end().split('|').collect();
-    assert_eq!(common_path_fields[3], format!("{kitty_prefix}f"));
+    let kitty_before_tab = fs::read_to_string(&state_dump).unwrap();
+    let kitty_before_fields: Vec<_> = kitty_before_tab.trim_end().split('|').collect();
+    let kitty_index: usize = kitty_before_fields[5].parse().unwrap();
+    let kitty_selected = kitty_before_fields[14]
+        .split(';')
+        .nth(kitty_index - 1)
+        .unwrap()
+        .to_owned();
     Command::new("tmux")
         .args(["-L", &server, "send-keys", "-t", "test:0.0", "Tab"])
         .status()
@@ -798,7 +806,11 @@ PROMPT='%# '
     dump_zle_state(&server, &state_dump);
     let exact_path_state = fs::read_to_string(&state_dump).unwrap();
     let exact_path_fields: Vec<_> = exact_path_state.trim_end().split('|').collect();
-    assert_eq!(exact_path_fields[3], format!("{kitty_prefix}f "));
+    assert_eq!(
+        exact_path_fields[3],
+        format!("{kitty_selected} "),
+        "Tab did not fill the selected file candidate: {exact_path_state:?}"
+    );
 
     Command::new("tmux")
         .args(["-L", &server, "send-keys", "-t", "test:0.0", "C-c"])

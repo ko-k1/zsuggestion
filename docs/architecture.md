@@ -86,18 +86,12 @@ ZLE `region_highlight` entries style matches, provenance, descriptions, kind
 badges, the scrollbar, and the full-width selected-row background using
 validated colors from the UI configuration. Arrow keys, Ctrl-N, and Ctrl-K move
 the selection; Shift-Tab cycles it upward; Escape dismisses the popup without
-touching the buffer; and the configured completion key
-accepts its configured amount and immediately queries again. Tab accepts the
-shortest next semantic segment while the menu is open. Boundaries include words,
-paths, assignments, lists, URLs, and remote destinations such as
-`user@host:/path`;
-quoted, escaped, and bracketed IPv6 separators remain intact. When multiple
-filesystem candidates are present, Tab accepts their common insertion prefix if
-one exists and otherwise leaves the buffer unchanged instead of selecting an
-arbitrary first entry. Exact files remain as explicit candidates whose next Tab
-adds the trailing space.
-After any accepted segment, the refreshed menu starts at row 1 rather than
-carrying its previous index forward. Selection does not change the
+touching the buffer; Tab fills the selected candidate in full while the menu is
+open — appending only the text after the query baseline so an existing prefix is
+never duplicated — adds a trailing space for command-like results, and
+immediately queries again for follow-up arguments. The configured completion
+key accepts the same way.
+Selection does not change the
 editing keymap, so character insertion and Backspace keep their ordinary
 behavior. Enter is never rebound. With no menu, Tab and Shift-Tab clear stale
 display state and delegate to the widgets they replaced. Native completion entry

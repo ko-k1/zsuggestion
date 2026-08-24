@@ -6,7 +6,7 @@ first. It would rather show nothing than offer a completion it cannot justify.
 The project is in early development. The current vertical slice provides a
 shared local daemon, SQLite-backed command history, Zsh history import, and
 an inline completion menu, ghost text, command discovery, lazy descriptions,
-native Zsh candidates, full acceptance, and segment-by-segment Tab completion.
+native Zsh candidates, and full one-keystroke acceptance via Tab.
 
 ## Principles
 
@@ -15,7 +15,8 @@ native Zsh candidates, full acceptance, and segment-by-segment Tab completion.
 - Candidate providers are ordered tiers; lower tiers fill unused menu capacity
   but never outrank higher-confidence results.
 - The menu appears while typing and highlights the highest-ranked candidate.
-- Ctrl-Space accepts the entire candidate; Tab accepts one useful segment.
+- Tab fills the entire selected candidate; the configured completion key
+  (default Ctrl-Space) accepts it as well.
 - No per-command shell completion scripts are required.
 - Every host has one shared daemon and one history database.
 - tmux panes and concurrent SSH shells remain lightweight clients.
@@ -54,9 +55,9 @@ The integration:
   the previous import.
 - Records submitted foreground commands and the shell status reported afterward.
 - Starts the per-host daemon automatically.
-- Uses Tab to accept the shortest next word or path segment from an open
-  zsuggestion menu; each accepted segment resets the refreshed menu to row 1.
-  With no open suggestion, Tab delegates to the previous Zsh widget.
+- Uses Tab to fill the selected suggestion in one step and immediately queries
+  for follow-up candidates. With no open suggestion, Tab delegates to the
+  previous Zsh widget.
 - Uses Shift-Tab to move upward through suggestions without entering a modal
   editing state; letters and Backspace continue editing normally.
 - Consumes both consecutive trigger spaces to enter inline fuzzy mode over shared
@@ -95,8 +96,8 @@ The integration:
   widgets, cancelling stale completion work before history changes the buffer.
 - Dismisses the popup with Escape without touching the command buffer, so a new
   query starts fresh the next time the buffer changes.
-- Accepts the full suggestion with Ctrl-Space, or the shortest next segment with
-  Tab; Enter remains the shell's untouched command-submission binding.
+- Fills the full suggestion with Tab or the configured completion key; Enter
+  remains the shell's untouched command-submission binding.
 - Leaves tmux pane titles and automatic window naming entirely under tmux and
   the foreground application's control.
 
@@ -239,7 +240,7 @@ Implemented:
   sections, including common Clap, Cobra, Click, and argparse layouts.
 - Asynchronous native Zsh candidate capture for append-safe options,
   subcommands, paths, aliases, and other configured completion sources.
-- Prefix-only completion with conservative partial acceptance.
+- Prefix-only completion; Tab fills the highlighted candidate exactly.
 - Cursor-anchored, scrolling ZLE popup with ghost text, descriptions, kind
   badges, highlighted matches, a position scrollbar, and configurable colors.
 - Debounced asynchronous completion requests that never block character input.

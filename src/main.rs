@@ -1236,7 +1236,7 @@ if [[ -o interactive ]] && (( $+commands[zsuggestion] )); then
       POSTDISPLAY+=$'\n'"${padding}${footer}"
       region_highlight+=("$line_start $(( line_start + ${#footer} )) fg=__ZSUGGESTION_UI_MUTED__ memo=zsuggestion")
     else
-      local footer=" Up/Down select ${separator} Tab part ${separator} __ZSUGGESTION_COMPLETION_KEY_LABEL__ full "
+      local footer=" Up/Down select ${separator} Tab fill ${separator} __ZSUGGESTION_COMPLETION_KEY_LABEL__ full "
       line_start=$(( ${#input} + ${#POSTDISPLAY} + 1 + indent ))
       POSTDISPLAY+=$'\n'"${padding}${footer}"
       region_highlight+=("$line_start $(( line_start + ${#footer} )) fg=__ZSUGGESTION_UI_MUTED__ memo=zsuggestion")
@@ -1335,77 +1335,7 @@ if [[ -o interactive ]] && (( $+commands[zsuggestion] )); then
     return 0
   }
 
-  _zsuggestion_next_segment() {
-    local value="$1" character
-    local index boundary next quote=""
-    local saw_non_whitespace=0 escaped=0 bracket_depth=0
-    REPLY="$value"
-    for (( index = 1; index <= ${#value}; index++ )); do
-      character="${value[$index]}"
-      if (( escaped )); then
-        escaped=0
-        saw_non_whitespace=1
-        continue
-      fi
-      if [[ "$character" == \\ && "$quote" != "'" ]]; then
-        escaped=1
-        saw_non_whitespace=1
-        continue
-      fi
-      if [[ "$character" == "'" || "$character" == '"' ]]; then
-        if [[ "$quote" == "$character" ]]; then
-          quote=""
-        elif [[ -z "$quote" ]]; then
-          quote="$character"
-        fi
-        saw_non_whitespace=1
-        continue
-      fi
-      if [[ -n "$quote" ]]; then
-        saw_non_whitespace=1
-        continue
-      fi
-      if [[ "$character" == [[:space:]] ]]; then
-        if (( saw_non_whitespace )); then
-          REPLY="${value[1,$index]}"
-          return 0
-        fi
-        continue
-      fi
-      saw_non_whitespace=1
-      if [[ "$character" == '[' ]]; then
-        (( bracket_depth++ ))
-      elif [[ "$character" == ']' ]]; then
-        (( bracket_depth > 0 )) && (( bracket_depth-- ))
-      elif (( bracket_depth == 0 )); then
-        if [[ "$character" == '@' || "$character" == '=' || "$character" == ',' ]]; then
-          REPLY="${value[1,$index]}"
-          return 0
-        fi
-        if [[ "$character" == ':' ]]; then
-          boundary=$index
-          while (( boundary < ${#value} )); do
-            next="${value[$(( boundary + 1 ))]}"
-            [[ "$next" == ':' || "$next" == '/' ]] || break
-            (( boundary++ ))
-          done
-          REPLY="${value[1,$boundary]}"
-          return 0
-        fi
-        if [[ "$character" == '/' ]]; then
-          boundary=$index
-          while (( boundary < ${#value} )) && [[ "${value[$(( boundary + 1 ))]}" == '/' ]]; do
-            (( boundary++ ))
-          done
-          REPLY="${value[1,$boundary]}"
-          return 0
-        fi
-      fi
-    done
-  }
-
   _zsuggestion_menu_accept() {
-    local mode="${1:-candidate}"
     local accept="${_ZSUGGESTION_MENU_ACCEPTS[$_ZSUGGESTION_MENU_INDEX]}"
     local display="${_ZSUGGESTION_MENU_DISPLAYS[$_ZSUGGESTION_MENU_INDEX]}"
     local source="${_ZSUGGESTION_MENU_SOURCES[$_ZSUGGESTION_MENU_INDEX]}"
@@ -1420,11 +1350,7 @@ if [[ -o interactive ]] && (( $+commands[zsuggestion] )); then
       _zsuggestion_menu_schedule
       return 0
     fi
-    if [[ "$mode" == segment ]]; then
-      _zsuggestion_next_segment "$accept"
-      accept="$REPLY"
-    fi
-    LBUFFER+="$accept"
+    LBUFFER+="${accept#"$_ZSUGGESTION_MENU_BUFFER"}"
     if [[ ( "$source" == native || "$kind" == file || "$kind" == option ||
             "$kind" == subcommand || "$kind" == value ) &&
           "$BUFFER" == "$display" &&
@@ -1432,55 +1358,9 @@ if [[ -o interactive ]] && (( $+commands[zsuggestion] )); then
       LBUFFER+=" "
     fi
     POSTDISPLAY=""
-    if [[ "$mode" == segment ]]; then
-      _ZSUGGESTION_MENU_INDEX=1
-      _ZSUGGESTION_MENU_START=1
-      _ZSUGGESTION_MENU_RESTORE_INDEX=1
-      _zsuggestion_menu_refresh
-    else
-      _zsuggestion_menu_clear
-      _ZSUGGESTION_MENU_BUFFER="$BUFFER"
-      _zsuggestion_menu_schedule
-    fi
-  }
-
-  _zsuggestion_path_accept() {
-    local index found=0 common="" candidate
-    for (( index = 1; index <= ${#_ZSUGGESTION_MENU_ACCEPTS}; index++ )); do
-      [[ "${_ZSUGGESTION_MENU_KINDS[$index]}" == file ||
-         "${_ZSUGGESTION_MENU_KINDS[$index]}" == directory ]] || continue
-      (( found++ ))
-      candidate="${_ZSUGGESTION_MENU_ACCEPTS[$index]}"
-      if [[ -z "$common" ]]; then
-        common="$candidate"
-      else
-        while [[ -n "$common" && "$candidate" != "$common"* ]]; do
-          common="${common[1,-2]}"
-        done
-      fi
-    done
-    if [[ "${_ZSUGGESTION_MENU_KINDS[$_ZSUGGESTION_MENU_INDEX]}" == file &&
-          "${_ZSUGGESTION_MENU_DISPLAYS[$_ZSUGGESTION_MENU_INDEX]}" == "$BUFFER" ]]; then
-      _zsuggestion_menu_accept segment
-      return
-    fi
-    if (( found == 1 )) && [[ "${_ZSUGGESTION_MENU_DESCRIPTIONS[$_ZSUGGESTION_MENU_INDEX]}" != *"(more matches)" ]]; then
-      _zsuggestion_menu_accept segment
-      return
-    fi
-    if [[ -n "$common" && "${(j: :)_ZSUGGESTION_MENU_DESCRIPTIONS}" != *"(more matches)"* ]]; then
-      _zsuggestion_next_segment "$common"
-      if [[ -n "$REPLY" ]]; then
-        LBUFFER+="$REPLY"
-        POSTDISPLAY=""
-        _ZSUGGESTION_MENU_INDEX=1
-        _ZSUGGESTION_MENU_START=1
-        _ZSUGGESTION_MENU_RESTORE_INDEX=1
-        _zsuggestion_menu_refresh
-        return
-      fi
-    fi
-    zle beep
+    _zsuggestion_menu_clear
+    _ZSUGGESTION_MENU_BUFFER="$BUFFER"
+    _zsuggestion_menu_schedule
   }
 
   _zsuggestion_call_native_completion() {
@@ -2081,12 +1961,7 @@ if [[ -o interactive ]] && (( $+commands[zsuggestion] )); then
       return
     fi
     if (( _ZSUGGESTION_MENU_ACTIVE && CURSOR == ${#BUFFER} )); then
-      if [[ "${_ZSUGGESTION_MENU_KINDS[$_ZSUGGESTION_MENU_INDEX]}" == file ||
-            "${_ZSUGGESTION_MENU_KINDS[$_ZSUGGESTION_MENU_INDEX]}" == directory ]]; then
-        _zsuggestion_path_accept
-        return
-      fi
-      _zsuggestion_menu_accept segment
+      _zsuggestion_menu_accept
       return
     fi
     _zsuggestion_menu_clear
