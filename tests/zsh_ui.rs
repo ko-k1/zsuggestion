@@ -27,6 +27,7 @@ fn popup_preserves_highlights_and_shell_bindings() {
     fs::set_permissions(&zdotdir, fs::Permissions::from_mode(0o700)).unwrap();
 
     let config = temporary.path().join("zsuggestion.toml");
+    fs::write(&config, "[completion]\nmax_candidates = 24\n").unwrap();
     let socket = state.join("zsuggestion.sock");
     let state_dump = temporary.path().join("zle-state");
     let sync_file = temporary.path().join("zle-sync");

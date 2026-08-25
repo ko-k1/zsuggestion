@@ -302,7 +302,7 @@ pub fn filesystem_candidates(
     };
     let show_hidden = name_prefix.starts_with('.');
     let mut matches = Vec::new();
-    for child in children.take(MAX_DIRECTORY_ENTRIES).flatten() {
+    for child in children.flatten() {
         let Some(name) = child.file_name().to_str().map(str::to_owned) else {
             continue;
         };
@@ -333,6 +333,9 @@ pub fn filesystem_candidates(
             insert_text.push(' ');
         }
         matches.push((is_directory, name, insert_text, exact_file));
+        if matches.len() >= MAX_DIRECTORY_ENTRIES {
+            break;
+        }
     }
     matches.sort_unstable_by(|left, right| right.0.cmp(&left.0).then_with(|| left.1.cmp(&right.1)));
     Ok(matches
@@ -360,7 +363,7 @@ pub fn filesystem_candidates(
 
 pub fn merge_filesystem_candidates(
     response: &mut CompletionResponse,
-    mut paths: Vec<Candidate>,
+    paths: Vec<Candidate>,
     limit: usize,
 ) {
     if paths.is_empty() || limit == 0 {
@@ -372,31 +375,37 @@ pub fn merge_filesystem_candidates(
         .rev()
         .take_while(|candidate| candidate.source == CandidateSource::History)
         .count();
-    let path_slots = paths.len().min((limit / 2).max(1));
-    if paths.len() > path_slots
-        && let Some(first) = paths.first_mut()
-    {
-        first.description.push_str(" (more matches)");
-    }
     let mut original = std::mem::take(&mut response.candidates);
-    let split_at = original.len() - history_count;
-    let history = original.split_off(split_at);
+    let history = original.split_off(original.len() - history_count);
     let mut seen = HashSet::new();
-    let pre_path_keep = limit.saturating_sub(path_slots);
-    for candidate in original.into_iter().chain(history) {
-        if response.candidates.len() >= pre_path_keep {
+    for candidate in original {
+        if response.candidates.len() >= limit {
             break;
         }
         if seen.insert(candidate.display.clone()) {
             response.candidates.push(candidate);
         }
     }
+    let path_start = response.candidates.len();
+    let mut truncated = false;
     for path in paths {
         if response.candidates.len() >= limit {
+            truncated = true;
             break;
         }
         if seen.insert(path.display.clone()) {
             response.candidates.push(path);
+        }
+    }
+    if truncated && let Some(last) = response.candidates.get_mut(path_start) {
+        last.description.push_str(" (more matches)");
+    }
+    for candidate in history {
+        if response.candidates.len() >= limit {
+            break;
+        }
+        if seen.insert(candidate.display.clone()) {
+            response.candidates.push(candidate);
         }
     }
 }
@@ -862,25 +871,21 @@ mod tests {
                 source: CandidateSource::Filesystem,
             })
             .collect();
-        merge_filesystem_candidates(&mut response, paths, 4);
-        assert_eq!(response.candidates.len(), 4);
-        assert_eq!(response.candidates[0].source, CandidateSource::Command);
-        assert_eq!(
+        merge_filesystem_candidates(&mut response, paths, 6);
+        assert_eq!(response.candidates.len(), 6);
+        assert!(
             response
                 .candidates
                 .iter()
-                .filter(|candidate| candidate.source == CandidateSource::Filesystem)
-                .count(),
-            2
+                .take(4)
+                .all(|candidate| candidate.source == CandidateSource::Command)
         );
-        assert_eq!(
+        assert!(
             response
                 .candidates
                 .iter()
-                .take(2)
-                .filter(|candidate| candidate.source == CandidateSource::Command)
-                .count(),
-            2
+                .skip(4)
+                .all(|candidate| candidate.source == CandidateSource::Filesystem)
         );
 
         let mut response = CompletionResponse::empty(0);
