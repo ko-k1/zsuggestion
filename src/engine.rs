@@ -278,9 +278,8 @@ pub fn filesystem_candidates(
     buffer: &str,
     cursor_byte: usize,
     cwd: &str,
-    limit: usize,
 ) -> Result<Vec<Candidate>> {
-    if limit == 0 || cursor_byte != buffer.len() || !buffer.is_char_boundary(cursor_byte) {
+    if cursor_byte != buffer.len() || !buffer.is_char_boundary(cursor_byte) {
         return Ok(Vec::new());
     }
     let Some(argument_start) = current_argument_start(buffer) else {
@@ -340,7 +339,6 @@ pub fn filesystem_candidates(
     matches.sort_unstable_by(|left, right| right.0.cmp(&left.0).then_with(|| left.1.cmp(&right.1)));
     Ok(matches
         .into_iter()
-        .take(limit)
         .map(|(is_directory, _, insert_text, exact_file)| Candidate {
             display: if exact_file {
                 buffer.to_owned()
@@ -386,24 +384,12 @@ pub fn merge_filesystem_candidates(
             response.candidates.push(candidate);
         }
     }
-    let path_start = response.candidates.len();
-    let mut truncated = false;
     for path in paths {
-        if response.candidates.len() >= limit {
-            truncated = true;
-            break;
-        }
         if seen.insert(path.display.clone()) {
             response.candidates.push(path);
         }
     }
-    if truncated && let Some(last) = response.candidates.get_mut(path_start) {
-        last.description.push_str(" (more matches)");
-    }
     for candidate in history {
-        if response.candidates.len() >= limit {
-            break;
-        }
         if seen.insert(candidate.display.clone()) {
             response.candidates.push(candidate);
         }
@@ -773,7 +759,7 @@ mod tests {
 
         let buffer = "scp -r alpha";
         let candidates =
-            filesystem_candidates(buffer, buffer.len(), directory.path().to_str().unwrap(), 10)
+            filesystem_candidates(buffer, buffer.len(), directory.path().to_str().unwrap())
                 .unwrap();
         assert_eq!(candidates[0].display, "scp -r alpha-dir/");
         assert_eq!(candidates[0].kind, CandidateKind::Directory);
@@ -793,22 +779,20 @@ mod tests {
 
         let nested = "scp -r space\\ dir/ch";
         let candidates =
-            filesystem_candidates(nested, nested.len(), directory.path().to_str().unwrap(), 10)
+            filesystem_candidates(nested, nested.len(), directory.path().to_str().unwrap())
                 .unwrap();
         assert_eq!(candidates[0].display, "scp -r space\\ dir/child");
 
         let exact = "scp -r alpha-file";
         let candidates =
-            filesystem_candidates(exact, exact.len(), directory.path().to_str().unwrap(), 10)
-                .unwrap();
+            filesystem_candidates(exact, exact.len(), directory.path().to_str().unwrap()).unwrap();
         assert_eq!(candidates.len(), 1);
         assert_eq!(candidates[0].display, exact);
         assert_eq!(candidates[0].accept_text, " ");
 
         let blank = "scp -r ";
         let candidates =
-            filesystem_candidates(blank, blank.len(), directory.path().to_str().unwrap(), 20)
-                .unwrap();
+            filesystem_candidates(blank, blank.len(), directory.path().to_str().unwrap()).unwrap();
         assert!(
             candidates
                 .iter()
@@ -828,7 +812,7 @@ mod tests {
 
         let buffer = "command ";
         let candidates =
-            filesystem_candidates(buffer, buffer.len(), directory.path().to_str().unwrap(), 10)
+            filesystem_candidates(buffer, buffer.len(), directory.path().to_str().unwrap())
                 .unwrap();
         assert!(
             candidates
@@ -836,7 +820,7 @@ mod tests {
                 .any(|candidate| candidate.display == "command visible")
         );
         assert!(
-            filesystem_candidates("com", 3, directory.path().to_str().unwrap(), 10)
+            filesystem_candidates("com", 3, directory.path().to_str().unwrap())
                 .unwrap()
                 .is_empty()
         );
@@ -901,7 +885,13 @@ mod tests {
             })
             .collect();
         merge_filesystem_candidates(&mut response, paths, 1);
-        assert_eq!(response.candidates[0].description, "File (more matches)");
+        assert_eq!(response.candidates.len(), 2);
+        assert!(
+            response
+                .candidates
+                .iter()
+                .all(|c| c.source == CandidateSource::Filesystem)
+        );
     }
 
     #[test]

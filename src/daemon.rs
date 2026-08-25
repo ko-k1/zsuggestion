@@ -257,8 +257,7 @@ fn dispatch(
             let limit = limit
                 .unwrap_or(settings.completion.max_candidates)
                 .min(settings.completion.max_candidates);
-            let paths =
-                engine::filesystem_candidates(&buffer, cursor_byte, &cwd, limit.saturating_add(1))?;
+            let paths = engine::filesystem_candidates(&buffer, cursor_byte, &cwd)?;
             engine::merge_filesystem_candidates(&mut completion, paths, limit);
             Ok(Response::Completion(completion))
         }
