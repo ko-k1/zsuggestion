@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-pub const PROTOCOL_VERSION: u32 = 8;
+pub const PROTOCOL_VERSION: u32 = 9;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct RequestEnvelope {
@@ -35,6 +35,11 @@ pub enum Request {
         cursor_byte: usize,
         cwd: String,
         limit: Option<usize>,
+        /// Shell aliases relevant to this buffer. The frontend sends only
+        /// aliases whose names extend the command word, or the alias chain of
+        /// the first word, so the shared daemon never stores shell state.
+        #[serde(default, skip_serializing_if = "Vec::is_empty")]
+        aliases: Vec<Alias>,
     },
     Fuzzy {
         query: String,
@@ -44,6 +49,13 @@ pub enum Request {
     ImportHistory {
         path: String,
     },
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
+pub struct Alias {
+    pub name: String,
+    pub value: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]

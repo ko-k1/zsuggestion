@@ -36,7 +36,9 @@
   shell-safe escaping, and unambiguous Tab acceptance.
 - Broaden native Zsh capture beyond append-safe candidates and preserve native
   display descriptions, quoting, suffix removal, and replacement ranges.
-- Daemon-side executables, aliases, functions, and environment variable names.
+- Shell aliases as command candidates and leading-alias expansion for
+  structured contexts (done).
+- Daemon-side shell functions and environment variable names.
 - Git branches and remotes.
 - Package scripts and build targets.
 - Optional project-aware vocabulary provider.

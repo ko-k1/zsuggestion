@@ -12,7 +12,7 @@ use clap::{Parser, Subcommand, ValueEnum};
 use zsuggestion::client;
 use zsuggestion::config::{Paths, Settings, completion_key_sequence};
 use zsuggestion::daemon;
-use zsuggestion::protocol::{Request, Response};
+use zsuggestion::protocol::{Alias, Request, Response};
 
 #[derive(Debug, Parser)]
 #[command(name = "zsuggestion", version, about)]
@@ -50,6 +50,9 @@ enum Command {
         cwd: PathBuf,
         #[arg(long)]
         limit: Option<usize>,
+        /// A shell alias relevant to the buffer; may be repeated.
+        #[arg(long = "alias", value_name = "NAME=VALUE", value_parser = parse_alias)]
+        aliases: Vec<Alias>,
         #[arg(long, value_enum, default_value_t = OutputFormat::Json)]
         format: OutputFormat,
     },
@@ -150,6 +153,7 @@ fn run() -> Result<()> {
             cursor,
             cwd,
             limit,
+            aliases,
             format,
         } => {
             let response = client::request_idempotent(
@@ -159,6 +163,7 @@ fn run() -> Result<()> {
                     cursor_byte: cursor,
                     cwd: cwd.to_string_lossy().into_owned(),
                     limit,
+                    aliases,
                 },
             )?;
             write_completion(response, format)
@@ -647,6 +652,16 @@ fn write_completion(response: Response, format: OutputFormat) -> Result<()> {
         }
     }
     Ok(())
+}
+
+fn parse_alias(value: &str) -> Result<Alias, String> {
+    match value.split_once('=') {
+        Some((name, value)) if !name.is_empty() => Ok(Alias {
+            name: name.to_owned(),
+            value: value.to_owned(),
+        }),
+        _ => Err("expected NAME=VALUE".to_owned()),
+    }
 }
 
 fn expect_success(response: Response) -> Result<()> {
@@ -1433,10 +1448,40 @@ if [[ -o interactive ]] && (( $+commands[zsuggestion] )); then
     _ZSUGGESTION_MENU_OWNS_DISPLAY=1
   }
 
+  # Collects only the aliases a completion request needs, so the shared daemon
+  # never stores shell state: names extending the command word while it is
+  # being typed, or the leading alias chain once arguments begin.
+  _zsuggestion_alias_args() {
+    emulate -L zsh
+    setopt extended_glob
+    reply=()
+    local buffer="$1" word name
+    local -i depth=0
+    local -A seen
+    (( ${#aliases} )) || return 0
+    if [[ "$buffer" != *[[:space:]]* ]]; then
+      [[ "$buffer" == [[:alnum:]_+-]## ]] || return 0
+      for name in ${${(ok)aliases[(I)${(b)buffer}*]}[1,32]}; do
+        reply+=(--alias "${name}=${aliases[$name]}")
+      done
+      return 0
+    fi
+    word="${buffer%%[[:space:]]*}"
+    while (( depth++ < 8 )) && [[ -n "$word" && -z "${seen[$word]}" ]] &&
+          (( ${+aliases[$word]} )); do
+      seen[$word]=1
+      reply+=(--alias "${word}=${aliases[$word]}")
+      word="${${aliases[$word]##[[:space:]]#}%%[[:space:]]*}"
+    done
+  }
+
   _zsuggestion_menu_query() {
-    local LC_ALL=C cursor_byte accept display description kind source
+    local LC_ALL=C cursor_byte accept display description kind source reply
+    local -a alias_args
     _zsuggestion_menu_cancel_request
     cursor_byte=${#LBUFFER}
+    _zsuggestion_alias_args "$BUFFER"
+    alias_args=("${reply[@]}")
     _ZSUGGESTION_MENU_BUFFER="$BUFFER"
     _ZSUGGESTION_MENU_ACCEPTS=()
     _ZSUGGESTION_MENU_DISPLAYS=()
@@ -1457,6 +1502,7 @@ if [[ -o interactive ]] && (( $+commands[zsuggestion] )); then
       --stdin \
       --cursor "$cursor_byte" \
       --cwd "$PWD" \
+      "${alias_args[@]}" \
       --format zsh 2>/dev/null)
     if (( ${#_ZSUGGESTION_MENU_ACCEPTS} == 0 )); then
       _zsuggestion_menu_clear 1
@@ -2024,7 +2070,8 @@ if [[ -o interactive ]] && (( $+commands[zsuggestion] )); then
   }
 
   _zsuggestion_menu_tick() {
-    local fd="$1" tick query_fd buffer cwd cursor
+    local fd="$1" tick query_fd buffer cwd cursor reply
+    local -a alias_args
     if (( fd != _ZSUGGESTION_MENU_TICK_FD )) || ! IFS= read -r -u "$fd" tick; then
       zle -F "$fd" 2>/dev/null
       exec {fd}<&-
@@ -2108,10 +2155,13 @@ if [[ -o interactive ]] && (( $+commands[zsuggestion] )); then
         --cwd "$cwd" \
         --format zsh-v3 2>/dev/null)
     else
+      _zsuggestion_alias_args "$buffer"
+      alias_args=("${reply[@]}")
       exec {query_fd}< <(print -rn -- "$buffer" | command zsuggestion complete \
         --stdin \
         --cursor "$cursor" \
         --cwd "$cwd" \
+        "${alias_args[@]}" \
         --format zsh-v3 2>/dev/null)
     fi
     _ZSUGGESTION_MENU_REQUEST_FD="$query_fd"

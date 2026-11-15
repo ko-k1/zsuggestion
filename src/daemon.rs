@@ -238,6 +238,7 @@ fn dispatch(
             cursor_byte,
             cwd,
             limit,
+            aliases,
         } => {
             if cwd.len() > MAX_PATH_BYTES {
                 bail!("working directory is too long");
@@ -251,6 +252,7 @@ fn dispatch(
                     cursor_byte,
                     &cwd,
                     limit,
+                    &aliases,
                     settings,
                 )?
             };
