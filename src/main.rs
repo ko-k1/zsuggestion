@@ -1544,7 +1544,8 @@ if [[ -o interactive ]] && (( $+commands[zsuggestion] )); then
       (( retained_index > ${#_ZSUGGESTION_MENU_DISPLAYS} )) && retained_index=${#_ZSUGGESTION_MENU_DISPLAYS}
       (( retained_index < 1 )) && retained_index=1
       _ZSUGGESTION_MENU_INDEX=$retained_index
-      _ZSUGGESTION_MENU_START=$retained_index
+      # Keep the current viewport; render re-clamps it around the selection
+      # so a refresh never makes the visible window jump.
       _ZSUGGESTION_MENU_BUFFER="$BUFFER"
       _ZSUGGESTION_CAPTURE_FOREIGN_HIGHLIGHTS=1
       _zsuggestion_menu_render
@@ -1969,7 +1970,9 @@ if [[ -o interactive ]] && (( $+commands[zsuggestion] )); then
     (( _ZSUGGESTION_MENU_INDEX > ${#_ZSUGGESTION_MENU_DISPLAYS} )) && _ZSUGGESTION_MENU_INDEX=${#_ZSUGGESTION_MENU_DISPLAYS}
     (( _ZSUGGESTION_MENU_INDEX < 1 )) && _ZSUGGESTION_MENU_INDEX=1
     _ZSUGGESTION_MENU_RESTORE_INDEX=1
-    _ZSUGGESTION_MENU_START=$_ZSUGGESTION_MENU_INDEX
+    # Async results can land mid-navigation: keep the viewport where the user
+    # left it instead of snapping the selection to the top of the window.
+    (( _ZSUGGESTION_MENU_INDEX == 1 )) && _ZSUGGESTION_MENU_START=1
     _ZSUGGESTION_MENU_BUFFER="$_ZSUGGESTION_MENU_REQUEST_BUFFER"
     region_highlight=( "${_ZSUGGESTION_FOREIGN_HIGHLIGHTS[@]}" )
     _zsuggestion_menu_render
