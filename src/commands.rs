@@ -28,7 +28,6 @@ const WORKER_COUNT: usize = 2;
 const SUCCESS_TTL: Duration = Duration::from_secs(30 * 24 * 60 * 60);
 const MISS_TTL: Duration = Duration::from_secs(24 * 60 * 60);
 const MAN_TIMEOUT: Duration = Duration::from_millis(1_500);
-#[cfg(target_os = "macos")]
 const HELP_TIMEOUT: Duration = Duration::from_millis(1_000);
 
 static TEMP_SEQUENCE: AtomicU64 = AtomicU64::new(0);
@@ -658,8 +657,30 @@ fn help_enrichment(job: &DescriptionJob, output_dir: &Path) -> Option<Enrichment
 }
 
 #[cfg(not(target_os = "macos"))]
-fn help_enrichment(_job: &DescriptionJob, _output_dir: &Path) -> Option<Enrichment> {
-    None
+fn help_enrichment(job: &DescriptionJob, output_dir: &Path) -> Option<Enrichment> {
+    let home = env::var_os("HOME")
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from("/tmp"));
+    let mut command = Command::new(&job.path);
+    command
+        .arg("--help")
+        .env_clear()
+        .env("HOME", home)
+        .env("LC_ALL", "C")
+        .env("NO_COLOR", "1")
+        .env("PAGER", "cat")
+        .env("MANPAGER", "cat")
+        .env("TERM", "dumb")
+        .current_dir("/")
+        .stdin(Stdio::null())
+        .process_group(0);
+    let output = run_bounded(command, output_dir, HELP_TIMEOUT)?;
+    Some(Enrichment {
+        description: parse_help_description(&job.name, &output),
+        options: parse_options(&output),
+        subcommands: parse_subcommands(&output),
+        option_values: parse_option_values(&output),
+    })
 }
 
 fn run_bounded(mut command: Command, output_dir: &Path, timeout: Duration) -> Option<String> {
@@ -774,7 +795,6 @@ fn parse_man_description(name: &str, output: &str) -> Option<String> {
     None
 }
 
-#[cfg(any(target_os = "macos", test))]
 fn parse_help_description(name: &str, output: &str) -> Option<String> {
     for line in clean_lines(output) {
         let lower = line.to_ascii_lowercase();

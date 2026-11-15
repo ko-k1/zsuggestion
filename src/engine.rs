@@ -42,106 +42,26 @@ pub fn complete(
         .unwrap_or(settings.completion.max_candidates)
         .min(settings.completion.max_candidates);
 
-    // Command suggestions outrank personal history. Structured option,
-    // subcommand, and value completions are the most specific command
-    // suggestions, followed by the installed-command inventory; recorded
-    // history only fills the capacity they leave unused.
+    // Command-first ordering, mirroring ghost-complete: installed commands are
+    // offered before any other tier. Structured option, subcommand, and value
+    // completions follow, filling capacity commands leave unused. Filesystem
+    // matches are merged afterward, and recorded history always sinks to the
+    // bottom of the menu.
     let mut candidates: Vec<Candidate> = Vec::new();
 
     let mut enrichment_pending = false;
-    let help_candidates = if let Some((command, option, prefix)) = value_context(buffer) {
-        let values = commands.matching_values(command, option, prefix, limit);
-        enrichment_pending = values.pending;
-        values
-            .entries
-            .into_iter()
-            .filter_map(|value| {
-                let suffix = value.value.strip_prefix(prefix)?;
-                let insertion = if suffix.is_empty() { " " } else { suffix };
-                Some(Candidate {
-                    display: if suffix.is_empty() {
-                        buffer.to_owned()
-                    } else {
-                        format!("{buffer}{suffix}")
-                    },
-                    description: if value.description.is_empty() {
-                        format!("Value for {option}")
-                    } else {
-                        value.description
-                    },
-                    description_pending: false,
-                    kind: CandidateKind::Value,
-                    insert_text: insertion.to_owned(),
-                    accept_text: insertion.to_owned(),
-                    source: CandidateSource::Help,
-                })
-            })
-            .collect()
-    } else if let Some((command, prefix)) = option_context(buffer) {
-        let options = commands.matching_options(command, prefix, limit);
-        enrichment_pending = options.pending;
-        options
-            .entries
-            .into_iter()
-            .filter_map(|option| {
-                let suffix = option.spelling.strip_prefix(prefix)?;
-                if suffix.is_empty() {
-                    return None;
-                }
-                Some(Candidate {
-                    display: format!("{buffer}{suffix}"),
-                    description: option.description,
-                    description_pending: false,
-                    kind: CandidateKind::Option,
-                    insert_text: suffix.to_owned(),
-                    accept_text: suffix.to_owned(),
-                    source: CandidateSource::Help,
-                })
-            })
-            .collect()
-    } else if let Some((command, prefix)) = subcommand_context(buffer) {
-        let subcommands = commands.matching_subcommands(command, prefix, limit);
-        enrichment_pending = subcommands.pending;
-        subcommands
-            .entries
-            .into_iter()
-            .filter_map(|subcommand| {
-                let suffix = subcommand.name.strip_prefix(prefix)?;
-                let insertion = if suffix.is_empty() { " " } else { suffix };
-                Some(Candidate {
-                    display: if suffix.is_empty() {
-                        buffer.to_owned()
-                    } else {
-                        format!("{buffer}{suffix}")
-                    },
-                    description: subcommand.description,
-                    description_pending: false,
-                    kind: CandidateKind::Subcommand,
-                    insert_text: insertion.to_owned(),
-                    accept_text: insertion.to_owned(),
-                    source: CandidateSource::Help,
-                })
-            })
-            .collect()
-    } else {
-        Vec::new()
-    };
-    if !help_candidates.is_empty() {
-        let help_slots = help_candidates.len().min((limit / 2).max(1));
-        candidates.extend(help_candidates.into_iter().take(help_slots));
-    }
 
-    if candidates.len() < limit && valid_command_prefix(buffer) {
+    // Tier 1: installed commands — highest confidence, offered first.
+    if valid_command_prefix(buffer) {
         let remaining = limit - candidates.len();
         let command_candidates: Vec<_> = commands
-            .matching(buffer, limit)
+            .matching(buffer, remaining)
             .into_iter()
             .filter(|entry| {
                 !candidates
                     .iter()
                     .any(|candidate| candidate.display == entry.name)
             })
-            .take(remaining)
             .map(|entry| {
                 let suffix = entry.name.strip_prefix(buffer).unwrap_or_default();
                 let insertion = if suffix.is_empty() { " " } else { suffix };
@@ -159,6 +79,91 @@ pub fn complete(
         candidates.extend(command_candidates);
     }
 
+    // Tier 2: structured completions (options, subcommands, values) for the
+    // current command context. They fill capacity commands leave unused.
+    if candidates.len() < limit {
+        let remaining = limit - candidates.len();
+        let help_candidates = if let Some((command, option, prefix)) = value_context(buffer) {
+            let values = commands.matching_values(command, option, prefix, remaining);
+            enrichment_pending = values.pending;
+            values
+                .entries
+                .into_iter()
+                .filter_map(|value| {
+                    let suffix = value.value.strip_prefix(prefix)?;
+                    let insertion = if suffix.is_empty() { " " } else { suffix };
+                    Some(Candidate {
+                        display: if suffix.is_empty() {
+                            buffer.to_owned()
+                        } else {
+                            format!("{buffer}{suffix}")
+                        },
+                        description: if value.description.is_empty() {
+                            format!("Value for {option}")
+                        } else {
+                            value.description
+                        },
+                        description_pending: false,
+                        kind: CandidateKind::Value,
+                        insert_text: insertion.to_owned(),
+                        accept_text: insertion.to_owned(),
+                        source: CandidateSource::Help,
+                    })
+                })
+                .collect()
+        } else if let Some((command, prefix)) = option_context(buffer) {
+            let options = commands.matching_options(command, prefix, remaining);
+            enrichment_pending = options.pending;
+            options
+                .entries
+                .into_iter()
+                .filter_map(|option| {
+                    let suffix = option.spelling.strip_prefix(prefix)?;
+                    if suffix.is_empty() {
+                        return None;
+                    }
+                    Some(Candidate {
+                        display: format!("{buffer}{suffix}"),
+                        description: option.description,
+                        description_pending: false,
+                        kind: CandidateKind::Option,
+                        insert_text: suffix.to_owned(),
+                        accept_text: suffix.to_owned(),
+                        source: CandidateSource::Help,
+                    })
+                })
+                .collect()
+        } else if let Some((command, prefix)) = subcommand_context(buffer) {
+            let subcommands = commands.matching_subcommands(command, prefix, remaining);
+            enrichment_pending = subcommands.pending;
+            subcommands
+                .entries
+                .into_iter()
+                .filter_map(|subcommand| {
+                    let suffix = subcommand.name.strip_prefix(prefix)?;
+                    let insertion = if suffix.is_empty() { " " } else { suffix };
+                    Some(Candidate {
+                        display: if suffix.is_empty() {
+                            buffer.to_owned()
+                        } else {
+                            format!("{buffer}{suffix}")
+                        },
+                        description: subcommand.description,
+                        description_pending: false,
+                        kind: CandidateKind::Subcommand,
+                        insert_text: insertion.to_owned(),
+                        accept_text: insertion.to_owned(),
+                        source: CandidateSource::Help,
+                    })
+                })
+                .collect()
+        } else {
+            Vec::new()
+        };
+        candidates.extend(help_candidates.into_iter().take(remaining));
+    }
+
+    // Tier 3: recorded history fills any remaining capacity, always last.
     if candidates.len() < limit {
         let remaining = limit - candidates.len();
         let history =
@@ -385,11 +390,17 @@ pub fn merge_filesystem_candidates(
         }
     }
     for path in paths {
+        if response.candidates.len() >= limit {
+            break;
+        }
         if seen.insert(path.display.clone()) {
             response.candidates.push(path);
         }
     }
     for candidate in history {
+        if response.candidates.len() >= limit {
+            break;
+        }
         if seen.insert(candidate.display.clone()) {
             response.candidates.push(candidate);
         }
@@ -885,7 +896,7 @@ mod tests {
             })
             .collect();
         merge_filesystem_candidates(&mut response, paths, 1);
-        assert_eq!(response.candidates.len(), 2);
+        assert_eq!(response.candidates.len(), 1);
         assert!(
             response
                 .candidates
