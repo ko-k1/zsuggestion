@@ -54,8 +54,8 @@ tie-breakers in that order.
 Providers are queried in strict order:
 
 1. Parsed and cached root-command options, subcommands, and values.
-2. Cached installed-command inventory and known shell builtins for the first
-   token.
+2. Shell aliases, then cached installed-command inventory and known shell
+   builtins for the first token.
 3. Exact-prefix command history.
 4. Bounded local filesystem matches at argument positions.
 5. Append-safe candidates from the active Zsh completion system.
@@ -68,6 +68,19 @@ then remaining native Zsh candidates, with recorded history always last so
 personal history never buries fresh command content. Rows within a tier keep
 their provider query order. No
 broad command-intent model is in the interactive path.
+
+## Shell Aliases
+
+Aliases are shell-local, so the frontend sends them with each completion
+request rather than registering them with the shared daemon. While the command
+word is being typed it sends at most 32 aliases whose names extend that word;
+once arguments begin it sends only the first word's alias chain (up to eight
+links, stopping at cycles). The daemon bounds the payload, offers matching
+aliases as `Cmd` rows ahead of the executables they shadow, and expands the
+leading alias before resolving option, subcommand, and value contexts.
+Displays, insertions, history, and filesystem matches remain relative to the
+buffer as typed, and the conservative context parsers still abstain when an
+expansion contains shell syntax. Global and suffix aliases are not expanded.
 
 ## Conservative Editing
 

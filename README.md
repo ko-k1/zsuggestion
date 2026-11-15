@@ -79,6 +79,11 @@ The integration:
   Ctrl-E take the highlighted suggestion when the cursor is at the end of the
   line, and Alt-F or Ctrl-Right take its next word. Elsewhere those keys keep
   their previous widgets.
+- Suggests your shell aliases alongside installed commands (`gst` shows
+  `alias for git status`) and expands a leading alias before looking up flags,
+  subcommands, and values, so `g ch` completes like `git ch`. Each request
+  carries only the aliases that buffer needs; the shared daemon never stores
+  shell state.
 - Anchors the popup under the word being completed, like an IDE completion
   menu: zsuggestion asks the terminal where the prompt ends (falling back to
   `ui.prompt_offset` when the terminal does not answer), measures display
