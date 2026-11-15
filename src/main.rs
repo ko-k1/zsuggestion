@@ -691,6 +691,9 @@ fn zsh_integration(settings: &Settings) -> Result<String> {
     let menu_width = settings.ui.menu_width.to_string();
     let max_visible = settings.ui.max_visible.to_string();
     let max_candidates = settings.completion.max_candidates.to_string();
+    // Native Zsh results (subcommands, flags) are scrollable like an IDE
+    // popup, so they get more room than the conservative daemon tiers.
+    let native_limit = settings.completion.max_candidates.max(64).to_string();
     Ok(r#"# zsuggestion shell integration
 if [[ -o interactive ]] && (( $+commands[zsuggestion] )); then
   typeset -g ZSUGGESTION_ZSH_LOADED=1
@@ -759,6 +762,13 @@ if [[ -o interactive ]] && (( $+commands[zsuggestion] )); then
   typeset -ga _ZSUGGESTION_NATIVE_ACCEPTS=()
   typeset -ga _ZSUGGESTION_NATIVE_DISPLAYS=()
   typeset -ga _ZSUGGESTION_NATIVE_DESCRIPTIONS=()
+  typeset -ga _ZSUGGESTION_NATIVE_KINDS=()
+  typeset -g _ZSUGGESTION_PROMPT_COLUMN=-1
+  typeset -g _ZSUGGESTION_PROMPT_QUERY=1
+  typeset -g _ZSUGGESTION_PROMPT_ANSWERED=0
+  typeset -g _ZSUGGESTION_PROMPT_LATE=0
+  typeset -g _ZSUGGESTION_PROMPT_TIMEOUT=""
+  typeset -g _ZSUGGESTION_ANCHOR_HEAD=""
 
   _zsuggestion_preexec() {
     _ZSUGGESTION_COMMAND="$1"
@@ -778,6 +788,18 @@ if [[ -o interactive ]] && (( $+commands[zsuggestion] )); then
       _ZSUGGESTION_COMMAND=""
       _ZSUGGESTION_COMMAND_CWD=""
     fi
+    return 0
+  }
+
+  # Native flag, subcommand, and value candidates come from the Zsh completion
+  # system, as with fzf-tab. Load it at the first prompt when .zshrc has not,
+  # so a compinit call later in .zshrc still wins.
+  _zsuggestion_ensure_compsys() {
+    add-zsh-hook -d precmd _zsuggestion_ensure_compsys
+    (( __ZSUGGESTION_AUTO_COMPINIT__ )) || return 0
+    (( $+functions[_main_complete] || $+functions[compdef] )) && return 0
+    autoload -Uz compinit &&
+      compinit -i -d "${ZSH_COMPDUMP:-${ZDOTDIR:-$HOME}/.zcompdump}" 2>/dev/null
     return 0
   }
 
@@ -965,6 +987,7 @@ if [[ -o interactive ]] && (( $+commands[zsuggestion] )); then
     _ZSUGGESTION_NATIVE_ACCEPTS=()
     _ZSUGGESTION_NATIVE_DISPLAYS=()
     _ZSUGGESTION_NATIVE_DESCRIPTIONS=()
+    _ZSUGGESTION_NATIVE_KINDS=()
     if (( _ZSUGGESTION_MENU_OWNS_DISPLAY )); then
       POSTDISPLAY=""
       region_highlight=( "${(@)region_highlight:#*memo=zsuggestion*}" )
@@ -992,6 +1015,82 @@ if [[ -o interactive ]] && (( $+commands[zsuggestion] )); then
     _ZSUGGESTION_MENU_BUFFER="$BUFFER"
     _zsuggestion_menu_schedule
     _zsuggestion_menu_render
+  }
+
+  # Measure where the prompt ends by asking the terminal for the cursor
+  # position (DSR), so the popup lines up with the edited word under any prompt
+  # theme. Terminals that never answer fall back to ui.prompt_offset.
+  _zsuggestion_measure_prompt() {
+    (( __ZSUGGESTION_UI_MEASURE_PROMPT__ && _ZSUGGESTION_PROMPT_QUERY )) || return 0
+    [[ -z "$BUFFER" && "${TERM:-dumb}" != dumb && -w /dev/tty ]] || return 0
+    local reply="" char col
+    if [[ -z "$_ZSUGGESTION_PROMPT_TIMEOUT" ]]; then
+      _ZSUGGESTION_PROMPT_TIMEOUT=0.2
+      [[ -n "${SSH_CONNECTION:-}" ]] && _ZSUGGESTION_PROMPT_TIMEOUT=0.5
+    fi
+    zle -R
+    print -rn -- $'\e[6n' 2>/dev/null >/dev/tty || return 0
+    while read -rs -k 1 -t "$_ZSUGGESTION_PROMPT_TIMEOUT" char; do
+      reply+="$char"
+      [[ "$char" == R && "$reply" == *$'\e['<->';'<->R ]] && break
+    done
+    if [[ "$reply" == *$'\e['<->';'<->R ]]; then
+      col="${${reply##*;}%R}"
+      _ZSUGGESTION_PROMPT_COLUMN=$(( col - 1 ))
+      _ZSUGGESTION_PROMPT_ANSWERED=1
+      reply="${reply%$'\e['*}"
+    else
+      # Never reuse a column measured under an earlier prompt. A reply that
+      # arrives after the deadline reaches ZLE as typed text; the pre-redraw
+      # hook strips it. Terminals that have never answered are not asked again.
+      _ZSUGGESTION_PROMPT_COLUMN=-1
+      _ZSUGGESTION_PROMPT_LATE=1
+      (( _ZSUGGESTION_PROMPT_ANSWERED )) || _ZSUGGESTION_PROMPT_QUERY=0
+    fi
+    # Keys typed while waiting for the answer go back to the line editor.
+    [[ -n "$reply" ]] && zle -U -- "$reply"
+    return 0
+  }
+
+  # ZLE consumes the ESC of a late cursor-position reply and inserts the rest,
+  # such as "[12;5R". Remove it, adopt its column, and allow a longer deadline.
+  _zsuggestion_strip_late_prompt_reply() {
+    (( _ZSUGGESTION_PROMPT_LATE )) || return 0
+    [[ "$BUFFER" == *'['<->';'<->R* ]] || return 0
+    local before="${BUFFER%%\[<->;<->R*}" rest late
+    rest="${BUFFER[${#before}+1,-1]}"
+    late="${(M)rest#\[<->;<->R}"
+    [[ -n "$late" ]] || return 0
+    BUFFER="${before}${rest[${#late}+1,-1]}"
+    CURSOR=${#BUFFER}
+    _ZSUGGESTION_PROMPT_COLUMN=$(( ${${late##*;}%R} - 1 ))
+    _ZSUGGESTION_PROMPT_LATE=0
+    _ZSUGGESTION_PROMPT_ANSWERED=1
+    _ZSUGGESTION_PROMPT_QUERY=1
+    (( _ZSUGGESTION_PROMPT_TIMEOUT < 2 )) &&
+      _ZSUGGESTION_PROMPT_TIMEOUT=$(( _ZSUGGESTION_PROMPT_TIMEOUT * 2 ))
+    return 0
+  }
+
+  # Sets REPLY to the screen column where the word being completed starts and
+  # _ZSUGGESTION_ANCHOR_HEAD to the buffer text before that word.
+  _zsuggestion_anchor() {
+    local input="${1[1,$2]}" word head line prompt_column=$_ZSUGGESTION_PROMPT_COLUMN
+    if (( _ZSUGGESTION_FUZZY_ACTIVE )); then
+      head=""
+    else
+      word="${input##*[[:space:]]}"
+      head="${input[1,$(( ${#input} - ${#word} ))]}"
+    fi
+    _ZSUGGESTION_ANCHOR_HEAD="$head"
+    (( prompt_column < 0 )) && prompt_column=__ZSUGGESTION_UI_PROMPT_OFFSET__
+    if [[ "$head" == *$'\n'* ]]; then
+      line="${head##*$'\n'}"
+      prompt_column=0
+    else
+      line="$head"
+    fi
+    REPLY=$(( (prompt_column + ${(m)#line}) % ${COLUMNS:-80} ))
   }
 
   _zsuggestion_menu_render() {
@@ -1044,15 +1143,23 @@ if [[ -o interactive ]] && (( $+commands[zsuggestion] )); then
       _zsuggestion_preview_clear
       local compact_width=$(( ${COLUMNS:-80} - 1 ))
       if (( total > 0 && compact_width >= 8 )); then
-        local compact_indent=$(( __ZSUGGESTION_UI_PROMPT_OFFSET__ + cursor_position ))
-        local compact_max_indent=$(( ${COLUMNS:-80} - compact_width - 1 ))
+        _zsuggestion_anchor "$input" "$cursor_position"
+        local compact_head="$_ZSUGGESTION_ANCHOR_HEAD" compact_typed="$input"
+        local compact_padding compact_display="$selected" compact_completion=""
+        if [[ -n "$compact_head" && "$compact_display" == "$compact_head"* ]]; then
+          compact_display="${compact_display[${#compact_head}+1,-1]}"
+          compact_typed="${input[${#compact_head}+1,$cursor_position]}"
+        fi
+        # Start under the edited word; move left only as far as the row needs.
+        local compact_indent=$(( REPLY - 4 ))
+        local compact_max_indent=$(( ${COLUMNS:-80} - 1 - 4 - ${(m)#compact_display} ))
         (( compact_indent > compact_max_indent )) && compact_indent=$compact_max_indent
         (( compact_indent < 0 )) && compact_indent=0
-        local compact_padding compact_display="$selected" compact_completion=""
+        compact_width=$(( ${COLUMNS:-80} - 1 - compact_indent ))
         printf -v compact_padding '%*s' "$compact_indent" ""
         if (( ${#compact_display} > compact_width - 4 )); then
-          if (( ! _ZSUGGESTION_FUZZY_ACTIVE )) && [[ "$compact_display" == "$input"* ]]; then
-            compact_completion="${compact_display[${#input}+1,-1]}"
+          if (( ! _ZSUGGESTION_FUZZY_ACTIVE )) && [[ "$compact_display" == "$compact_typed"* ]]; then
+            compact_completion="${compact_display[${#compact_typed}+1,-1]}"
           fi
           if [[ -n "$compact_completion" ]] &&
              (( ${#compact_completion} <= compact_width - 6 )); then
@@ -1112,10 +1219,31 @@ if [[ -o interactive ]] && (( $+commands[zsuggestion] )); then
     (( _ZSUGGESTION_MENU_START > max_start )) && _ZSUGGESTION_MENU_START=$max_start
     local end=$(( _ZSUGGESTION_MENU_START + window_size - 1 ))
 
-    local description_width=24
-    (( box_width < 64 )) && description_width=16
+    # Like an IDE completion popup: rows show the word being completed, the
+    # popup starts under that word, and its width fits the content.
+    _zsuggestion_anchor "$input" "$cursor_position"
+    local anchor_column=$REPLY anchor_head="$_ZSUGGESTION_ANCHOR_HEAD"
+    local anchor_word="${input[${#anchor_head}+1,$cursor_position]}"
+    local shown max_title=0 max_description=0
+    for (( index = 1; index <= total; index++ )); do
+      shown="$_ZSUGGESTION_MENU_DISPLAYS[$index]"
+      [[ -n "$anchor_head" && "$shown" == "$anchor_head"* ]] && shown="${shown[${#anchor_head}+1,-1]}"
+      (( ${(m)#shown} > max_title )) && max_title=${(m)#shown}
+      shown="$_ZSUGGESTION_MENU_DESCRIPTIONS[$index]"
+      (( ${(m)#shown} > max_description )) && max_description=${(m)#shown}
+    done
     local kind_width=6
-    local title_width=$(( box_width - description_width - kind_width - 8 ))
+    local description_width=$max_description
+    (( description_width > 32 )) && description_width=32
+    (( description_width < 8 )) && description_width=8
+    local title_width=$max_title
+    (( title_width < 12 )) && title_width=12
+    if (( title_width + description_width + kind_width + 8 > box_width )); then
+      description_width=$(( box_width - title_width - kind_width - 8 ))
+      (( description_width < 12 )) && description_width=12
+      title_width=$(( box_width - description_width - kind_width - 8 ))
+    fi
+    box_width=$(( title_width + description_width + kind_width + 8 ))
     local thumb="█" track="│"
     if (( ! _ZSUGGESTION_UTF8_UI )); then
       thumb='#'
@@ -1129,7 +1257,9 @@ if [[ -o interactive ]] && (( $+commands[zsuggestion] )); then
       thumb_pos=$(( (_ZSUGGESTION_MENU_START - 1) * (window_size - thumb_size) / (total - window_size) ))
     fi
 
-    local indent=$(( __ZSUGGESTION_UI_PROMPT_OFFSET__ + cursor_position ))
+    # Rows start with a two-column marker and an icon, so shift left by four
+    # columns to put candidate text exactly under the edited word.
+    local indent=$(( anchor_column - 4 ))
     local max_indent=$(( ${COLUMNS:-80} - box_width - 1 ))
     (( indent > max_indent )) && indent=$max_indent
     (( indent < 0 )) && indent=0
@@ -1140,11 +1270,15 @@ if [[ -o interactive ]] && (( $+commands[zsuggestion] )); then
 
     for (( index = _ZSUGGESTION_MENU_START; index <= end; index++ )); do
       display="$_ZSUGGESTION_MENU_DISPLAYS[$index]"
-      local display_truncated=0 completion_tail=""
+      local display_truncated=0 completion_tail="" typed_part="$input"
+      if [[ -n "$anchor_head" && "$display" == "$anchor_head"* ]]; then
+        display="${display[${#anchor_head}+1,-1]}"
+        typed_part="$anchor_word"
+      fi
       if (( ${#display} > title_width )); then
         display_truncated=1
-        if (( ! _ZSUGGESTION_FUZZY_ACTIVE )) && [[ "$display" == "$input"* ]]; then
-          completion_tail="${display[${#input}+1,-1]}"
+        if (( ! _ZSUGGESTION_FUZZY_ACTIVE )) && [[ "$display" == "$typed_part"* ]]; then
+          completion_tail="${display[${#typed_part}+1,-1]}"
         fi
         if [[ -n "$completion_tail" ]] && (( ${#completion_tail} <= title_width - 2 )); then
           display="${ellipsis} ${completion_tail}"
@@ -1207,7 +1341,7 @@ if [[ -o interactive ]] && (( $+commands[zsuggestion] )); then
       region_highlight+=("$(( line_start + ${#row} - 1 )) $(( line_start + ${#row} )) $rail_attrs memo=zsuggestion")
 
       local match_length=0
-      (( ! _ZSUGGESTION_FUZZY_ACTIVE && ! display_truncated )) && match_length=${#input}
+      (( ! _ZSUGGESTION_FUZZY_ACTIVE && ! display_truncated )) && match_length=${#typed_part}
       (( match_length > title_width )) && match_length=$title_width
       if (( match_length > 0 )); then
         if (( index == _ZSUGGESTION_MENU_INDEX )); then
@@ -1442,14 +1576,15 @@ if [[ -o interactive ]] && (( $+commands[zsuggestion] )); then
     _ZSUGGESTION_NATIVE_ACCEPTS=()
     _ZSUGGESTION_NATIVE_DISPLAYS=()
     _ZSUGGESTION_NATIVE_DESCRIPTIONS=()
+    _ZSUGGESTION_NATIVE_KINDS=()
   }
 
   _zsuggestion_candidate_rank() {
     case "$1" in
       command) REPLY=0 ;;
-      directory) REPLY=1 ;;
-      file) REPLY=2 ;;
-      option | subcommand | value) REPLY=3 ;;
+      option | subcommand | value) REPLY=1 ;;
+      directory) REPLY=2 ;;
+      file) REPLY=3 ;;
       history) REPLY=5 ;;
       *) REPLY=4 ;;
     esac
@@ -1458,7 +1593,7 @@ if [[ -o interactive ]] && (( $+commands[zsuggestion] )); then
   _zsuggestion_menu_publish() {
     local index display
     local -a redraw_hooks apply_hooks
-    local limit=$(( __ZSUGGESTION_COMPLETION_MAX_CANDIDATES__ * 2 ))
+    local limit=$(( __ZSUGGESTION_COMPLETION_MAX_CANDIDATES__ * 2 + __ZSUGGESTION_NATIVE_LIMIT__ ))
     _ZSUGGESTION_MENU_ACCEPTS=()
     _ZSUGGESTION_MENU_DISPLAYS=()
     _ZSUGGESTION_MENU_DESCRIPTIONS=()
@@ -1483,7 +1618,7 @@ if [[ -o interactive ]] && (( $+commands[zsuggestion] )); then
         _ZSUGGESTION_MENU_ACCEPTS+=("${_ZSUGGESTION_NATIVE_ACCEPTS[$index]}")
         _ZSUGGESTION_MENU_DISPLAYS+=("$display")
         _ZSUGGESTION_MENU_DESCRIPTIONS+=("${_ZSUGGESTION_NATIVE_DESCRIPTIONS[$index]}")
-        _ZSUGGESTION_MENU_KINDS+=("native")
+        _ZSUGGESTION_MENU_KINDS+=("${_ZSUGGESTION_NATIVE_KINDS[$index]:-native}")
         _ZSUGGESTION_MENU_SOURCES+=("native")
         (( ${#_ZSUGGESTION_MENU_ACCEPTS} >= limit )) && break
       done
@@ -1599,6 +1734,7 @@ if [[ -o interactive ]] && (( $+commands[zsuggestion] )); then
       _ZSUGGESTION_NATIVE_ACCEPTS=()
       _ZSUGGESTION_NATIVE_DISPLAYS=()
       _ZSUGGESTION_NATIVE_DESCRIPTIONS=()
+      _ZSUGGESTION_NATIVE_KINDS=()
       return 0
     fi
     if (( ! _ZSUGGESTION_FUZZY_ACTIVE && ${#accepts} == 0 && _ZSUGGESTION_MENU_ACTIVE &&
@@ -1610,8 +1746,8 @@ if [[ -o interactive ]] && (( $+commands[zsuggestion] )); then
   }
 
   _zsuggestion_native_request_ready() {
-    local fd="$1" accept display description
-    local -a accepts displays descriptions
+    local fd="$1" accept display description kind
+    local -a accepts displays descriptions kinds
     if (( fd != _ZSUGGESTION_NATIVE_REQUEST_FD )); then
       zle -F "$fd" 2>/dev/null
       exec {fd}<&-
@@ -1634,10 +1770,12 @@ if [[ -o interactive ]] && (( $+commands[zsuggestion] )); then
     CURSOR=$_ZSUGGESTION_NATIVE_INFLIGHT_CURSOR
     while IFS= read -r -u "$fd" -d '' accept &&
           IFS= read -r -u "$fd" -d '' display &&
-          IFS= read -r -u "$fd" -d '' description; do
+          IFS= read -r -u "$fd" -d '' description &&
+          IFS= read -r -u "$fd" -d '' kind; do
       accepts+=("$accept")
       displays+=("$display")
       descriptions+=("$description")
+      kinds+=("$kind")
     done
     exec {fd}<&-
     _ZSUGGESTION_NATIVE_REQUEST_FD=-1
@@ -1647,92 +1785,149 @@ if [[ -o interactive ]] && (( $+commands[zsuggestion] )); then
     _ZSUGGESTION_NATIVE_ACCEPTS=("${accepts[@]}")
     _ZSUGGESTION_NATIVE_DISPLAYS=("${displays[@]}")
     _ZSUGGESTION_NATIVE_DESCRIPTIONS=("${descriptions[@]}")
+    _ZSUGGESTION_NATIVE_KINDS=("${kinds[@]}")
     _zsuggestion_menu_publish
   }
 
   _zsuggestion_native_capture_widget() {
     local fd
     exec {fd}< <(
-      local original_lbuffer="$LBUFFER"
-      local -a accepts displays descriptions
+      local __zsuggestion_original_lbuffer="$LBUFFER" __zsuggestion_original_current=$CURRENT
+      local -a __zsuggestion_accepts __zsuggestion_displays __zsuggestion_descriptions __zsuggestion_kinds
 
       compadd() {
-        local argument capture_rc current_prefix="$PREFIX"
-        local added_prefix="" hidden_prefix="" ignored_prefix=""
-        local added_suffix="" hidden_suffix="" ignored_suffix=""
-        local index=1
-        for argument in "$@"; do
-          if [[ "$argument" == -A || "$argument" == -O || "$argument" == -D ]]; then
-            builtin compadd "$@"
-            return
-          fi
+        local __zsuggestion_argument __zsuggestion_capture_rc __zsuggestion_current_prefix="$PREFIX"
+        local __zsuggestion_added_prefix="" __zsuggestion_hidden_prefix="" __zsuggestion_ignored_prefix=""
+        local __zsuggestion_added_suffix="" __zsuggestion_hidden_suffix="" __zsuggestion_ignored_suffix=""
+        local __zsuggestion_display_array="" __zsuggestion_passthrough=0 __zsuggestion_flags __zsuggestion_flag __zsuggestion_value
+        local __zsuggestion_index=1 __zsuggestion_flag_index
+        # Calls that only ask compadd for matches (-A, -O, -D) add nothing.
+        for __zsuggestion_argument in "$@"; do
+          [[ "$__zsuggestion_argument" == (-|--) ]] && break
+          [[ "$__zsuggestion_argument" == (-A|-O|-D) ]] && __zsuggestion_passthrough=1
         done
-        while (( index <= $# )); do
-          argument="${@[index]}"
-          case "$argument" in
-            --) break ;;
-            -P|-p|-i|-S|-s|-I)
-              (( index++ ))
-              (( index <= $# )) || break
-              case "$argument" in
-                -P) added_prefix="${@[index]}" ;;
-                -p) hidden_prefix="${@[index]}" ;;
-                -i) ignored_prefix="${@[index]}" ;;
-                -S) added_suffix="${@[index]}" ;;
-                -s) hidden_suffix="${@[index]}" ;;
-                -I) ignored_suffix="${@[index]}" ;;
-              esac
+        # Parse compadd options, including clustered forms such as "-ld name"
+        # that _describe and _git use for their description arrays.
+        while (( __zsuggestion_index <= $# )); do
+          __zsuggestion_argument="${@[__zsuggestion_index]}"
+          case "$__zsuggestion_argument" in
+            --|-) break ;;
+            -?*)
+              __zsuggestion_flags="${__zsuggestion_argument#-}"
+              for (( __zsuggestion_flag_index = 1; __zsuggestion_flag_index <= ${#__zsuggestion_flags}; __zsuggestion_flag_index++ )); do
+                __zsuggestion_flag="${__zsuggestion_flags[__zsuggestion_flag_index]}"
+                [[ "$__zsuggestion_flag" == [OAD] ]] && __zsuggestion_passthrough=1
+                if [[ "$__zsuggestion_flag" == o ]]; then
+                  # -o takes an optional order list, attached or separate.
+                  [[ -z "${__zsuggestion_flags[__zsuggestion_flag_index+1,-1]}" &&
+                     "${@[__zsuggestion_index+1]}" == (match|nosort|numeric|reverse)* ]] &&
+                    (( __zsuggestion_index++ ))
+                  break
+                fi
+                [[ "$__zsuggestion_flag" == [PpiSsIdJVXxrRMFEWOAD] ]] || continue
+                __zsuggestion_value="${__zsuggestion_flags[__zsuggestion_flag_index+1,-1]}"
+                if [[ -z "$__zsuggestion_value" ]]; then
+                  (( __zsuggestion_index++ ))
+                  __zsuggestion_value="${@[__zsuggestion_index]}"
+                fi
+                case "$__zsuggestion_flag" in
+                  P) __zsuggestion_added_prefix="$__zsuggestion_value" ;;
+                  p) __zsuggestion_hidden_prefix="$__zsuggestion_value" ;;
+                  i) __zsuggestion_ignored_prefix="$__zsuggestion_value" ;;
+                  S) __zsuggestion_added_suffix="$__zsuggestion_value" ;;
+                  s) __zsuggestion_hidden_suffix="$__zsuggestion_value" ;;
+                  I) __zsuggestion_ignored_suffix="$__zsuggestion_value" ;;
+                  d) __zsuggestion_display_array="$__zsuggestion_value" ;;
+                esac
+                break
+              done
               ;;
+            *) break ;;
           esac
-          (( index++ ))
+          (( __zsuggestion_index++ ))
         done
+        if (( __zsuggestion_passthrough || ${#__zsuggestion_accepts} >= __ZSUGGESTION_NATIVE_LIMIT__ )); then
+          builtin compadd "$@"
+          return
+        fi
 
-        local -a generated
-        generated=("${(@0)$(
-          local -a matches
-          builtin compadd -A matches "$@" 2>/dev/null
-          local match
-          for match in "${matches[@]}"; do
-            print -rn -- "$match"$'\0'
-          done
-        )}")
+        # Like fzf-tab: let compadd filter the words and, through -D, keep the
+        # caller's display strings ("word  -- description") aligned with them.
+        local -a __zsuggestion_hits __zsuggestion_hit_displays
+        [[ -n "$__zsuggestion_display_array" ]] && __zsuggestion_hit_displays=( "${(@P)__zsuggestion_display_array}" )
+        builtin compadd -A __zsuggestion_hits -D __zsuggestion_hit_displays "$@" 2>/dev/null
 
-        if [[ -z "$IPREFIX$ISUFFIX$QIPREFIX$QISUFFIX$SUFFIX$added_prefix$hidden_prefix$ignored_prefix" ]]; then
-          local base_length=$(( ${#original_lbuffer} - ${#current_prefix} ))
-          local base="" match full accept
-          (( base_length > 0 )) && base="${original_lbuffer[1,$base_length]}"
-          if (( base_length >= 0 )) &&
-             [[ -z "$current_prefix" ||
-                "${original_lbuffer[$(( base_length + 1 )),-1]}" == "$current_prefix" ]]; then
-            for match in "${generated[@]}"; do
-              (( ${#displays} < __ZSUGGESTION_COMPLETION_MAX_CANDIDATES__ )) || break
-              [[ -n "$match" && "${(q)match}" == "$match" ]] || continue
-              [[ -z "$current_prefix" ||
-                 "${match[1,${#current_prefix}]}" == "$current_prefix" ]] || continue
-              full="${base}${match}${hidden_suffix}${added_suffix}${ignored_suffix}"
-              [[ "$full" == "$original_lbuffer"* && "$full" != "$original_lbuffer" ]] || continue
-              (( ${displays[(Ie)$full]} )) && continue
-              accept="${full[${#original_lbuffer}+1,-1]}"
-              [[ -n "$accept" ]] || continue
-              accepts+=("$accept")
-              displays+=("$full")
-              descriptions+=("Zsh completion")
+        if [[ -z "$IPREFIX$ISUFFIX$QIPREFIX$QISUFFIX$SUFFIX$__zsuggestion_added_prefix$__zsuggestion_hidden_prefix$__zsuggestion_ignored_prefix" ]]; then
+          local __zsuggestion_base_length=$(( ${#__zsuggestion_original_lbuffer} - ${#__zsuggestion_current_prefix} ))
+          local __zsuggestion_base="" __zsuggestion_match __zsuggestion_full __zsuggestion_accept __zsuggestion_description __zsuggestion_kind __zsuggestion_tag="${curtag:-}"
+          local __zsuggestion_hit_index
+          (( __zsuggestion_base_length > 0 )) && __zsuggestion_base="${__zsuggestion_original_lbuffer[1,$__zsuggestion_base_length]}"
+          if (( __zsuggestion_base_length >= 0 )) &&
+             [[ -z "$__zsuggestion_current_prefix" ||
+                "${__zsuggestion_original_lbuffer[$(( __zsuggestion_base_length + 1 )),-1]}" == "$__zsuggestion_current_prefix" ]]; then
+            for (( __zsuggestion_hit_index = 1; __zsuggestion_hit_index <= ${#__zsuggestion_hits}; __zsuggestion_hit_index++ )); do
+              (( ${#__zsuggestion_accepts} < __ZSUGGESTION_NATIVE_LIMIT__ )) || break
+              __zsuggestion_match="${__zsuggestion_hits[$__zsuggestion_hit_index]}"
+              [[ -n "$__zsuggestion_match" && "${(q)__zsuggestion_match}" == "$__zsuggestion_match" ]] || continue
+              [[ -z "$__zsuggestion_current_prefix" ||
+                 "${__zsuggestion_match[1,${#__zsuggestion_current_prefix}]}" == "$__zsuggestion_current_prefix" ]] || continue
+              __zsuggestion_full="${__zsuggestion_base}${__zsuggestion_match}${__zsuggestion_hidden_suffix}${__zsuggestion_added_suffix}${__zsuggestion_ignored_suffix}"
+              [[ "$__zsuggestion_full" == "$__zsuggestion_original_lbuffer"* && "$__zsuggestion_full" != "$__zsuggestion_original_lbuffer" ]] || continue
+              (( ${__zsuggestion_displays[(Ie)$__zsuggestion_full]} )) && continue
+              __zsuggestion_accept="${__zsuggestion_full[${#__zsuggestion_original_lbuffer}+1,-1]}"
+              [[ -n "$__zsuggestion_accept" ]] || continue
+
+              __zsuggestion_description="${__zsuggestion_hit_displays[$__zsuggestion_hit_index]}"
+              if [[ "$__zsuggestion_description" == *" -- "* ]]; then
+                __zsuggestion_description="${${__zsuggestion_description#* -- }##[[:space:]]#}"
+              else
+                __zsuggestion_description=""
+              fi
+              case "$__zsuggestion_tag" in
+                options|*-options|flags|switches) __zsuggestion_kind=option ;;
+                directories|*-directories|directory-stack|named-directories) __zsuggestion_kind=directory ;;
+                files|*-files|globbed-files|all-files|paths) __zsuggestion_kind=file ;;
+                *)
+                  # External command names come from _command_names, also
+                  # after sudo or env; other "commands" tags are a tool's
+                  # own subcommands (cargo test, docker kill).
+                  if (( __zsuggestion_original_current <= 1 || ${funcstack[(I)_command_names]} )); then
+                    __zsuggestion_kind=command
+                  else
+                    case "$__zsuggestion_tag" in
+                      commands|*-commands|*-subcommands|subcommands|commands-*) __zsuggestion_kind=subcommand ;;
+                      *) __zsuggestion_kind=value ;;
+                    esac
+                  fi
+                  ;;
+              esac
+              [[ "$__zsuggestion_kind" == value && "$__zsuggestion_match" == -* ]] && __zsuggestion_kind=option
+              [[ ( "$__zsuggestion_kind" == file || "$__zsuggestion_kind" == command ) && "$__zsuggestion_full" == */ ]] && __zsuggestion_kind=directory
+              if [[ -z "$__zsuggestion_description" ]]; then
+                __zsuggestion_description="${__zsuggestion_tag//-/ }"
+                [[ -n "$__zsuggestion_description" ]] || __zsuggestion_description="Zsh completion"
+              fi
+              __zsuggestion_accepts+=("$__zsuggestion_accept")
+              __zsuggestion_displays+=("$__zsuggestion_full")
+              __zsuggestion_descriptions+=("$__zsuggestion_description")
+              __zsuggestion_kinds+=("$__zsuggestion_kind")
             done
           fi
         fi
 
         builtin compadd "$@"
-        capture_rc=$?
-        return "$capture_rc"
+        __zsuggestion_capture_rc=$?
+        return "$__zsuggestion_capture_rc"
       }
 
       _main_complete >/dev/null 2>&1
-      local index
-      for (( index = 1; index <= ${#accepts}; index++ )); do
-        printf '%s\0%s\0%s\0' \
-          "${accepts[$index]}" \
-          "${displays[$index]}" \
-          "${descriptions[$index]}"
+      local __zsuggestion_index
+      for (( __zsuggestion_index = 1; __zsuggestion_index <= ${#__zsuggestion_accepts}; __zsuggestion_index++ )); do
+        printf '%s\0%s\0%s\0%s\0' \
+          "${__zsuggestion_accepts[$__zsuggestion_index]}" \
+          "${__zsuggestion_displays[$__zsuggestion_index]}" \
+          "${__zsuggestion_descriptions[$__zsuggestion_index]}" \
+          "${__zsuggestion_kinds[$__zsuggestion_index]}"
       done
     )
     _ZSUGGESTION_NATIVE_REQUEST_FD="$fd"
@@ -1923,6 +2118,7 @@ if [[ -o interactive ]] && (( $+commands[zsuggestion] )); then
   }
 
   _zsuggestion_menu_line_init() {
+    _zsuggestion_measure_prompt
     _ZSUGGESTION_FUZZY_ACTIVE=0
     _ZSUGGESTION_FUZZY_BASE=""
     _ZSUGGESTION_FUZZY_QUERY=""
@@ -1932,6 +2128,7 @@ if [[ -o interactive ]] && (( $+commands[zsuggestion] )); then
   }
 
   _zsuggestion_menu_line_finish() {
+    _ZSUGGESTION_PROMPT_LATE=0
     _zsuggestion_menu_clear
     _zsuggestion_menu_stop_ticker
   }
@@ -1948,6 +2145,40 @@ if [[ -o interactive ]] && (( $+commands[zsuggestion] )); then
     fi
     zle _zsuggestion-native-self-insert
     _zsuggestion_menu_refresh
+  }
+
+  # zsh-autosuggestions style: Right, End, Ctrl-F, and Ctrl-E accept the ghost
+  # text of the highlighted row; Alt-F and Ctrl-Right accept its next word.
+  # Elsewhere each key keeps the widget it had before zsuggestion loaded.
+  _zsuggestion_ghost_text() {
+    REPLY=""
+    (( _ZSUGGESTION_MENU_ACTIVE && ! _ZSUGGESTION_FUZZY_ACTIVE && CURSOR == ${#BUFFER} )) || return 1
+    REPLY="${POSTDISPLAY%%$'\n'*}"
+    [[ -n "$REPLY" ]]
+  }
+
+  _zsuggestion_accept_ghost() {
+    if _zsuggestion_ghost_text; then
+      _zsuggestion_menu_accept
+      return
+    fi
+    _zsuggestion_accept_fallback .forward-char
+  }
+
+  _zsuggestion_accept_ghost_word() {
+    local ghost word
+    if _zsuggestion_ghost_text; then
+      ghost="$REPLY"
+      word="${ghost%%[^[:space:]]*}"
+      ghost="${ghost[${#word}+1,-1]}"
+      word+="${ghost%%[[:space:]]*}"
+      if [[ -n "$word" ]]; then
+        LBUFFER+="$word"
+        _zsuggestion_menu_refresh
+        return
+      fi
+    fi
+    _zsuggestion_accept_fallback .forward-word
   }
 
   _zsuggestion_space() {
@@ -2153,6 +2384,7 @@ if [[ -o interactive ]] && (( $+commands[zsuggestion] )); then
   }
 
   _zsuggestion_menu_pre_redraw() {
+    _zsuggestion_strip_late_prompt_reply
     if (( _ZSUGGESTION_CAPTURE_FOREIGN_HIGHLIGHTS )); then
       _ZSUGGESTION_FOREIGN_HIGHLIGHTS=( "${(@)region_highlight:#*memo=zsuggestion*}" )
       _ZSUGGESTION_CAPTURE_FOREIGN_HIGHLIGHTS=0
@@ -2187,6 +2419,9 @@ if [[ -o interactive ]] && (( $+commands[zsuggestion] )); then
 
   autoload -Uz add-zsh-hook
   autoload -Uz add-zle-hook-widget
+  # add-zle-hook-widget silently does nothing until zsh/zle is loaded, which
+  # otherwise only happens if something earlier in .zshrc defined a widget.
+  zmodload zsh/zle 2>/dev/null
   zmodload zsh/zselect 2>/dev/null && _ZSUGGESTION_HAS_ZSELECT=1
   if (( $+functions[_zsh_autosuggest_bind_widgets] )); then
     typeset -g ZSH_AUTOSUGGEST_MANUAL_REBIND=1
@@ -2194,6 +2429,7 @@ if [[ -o interactive ]] && (( $+commands[zsuggestion] )); then
   fi
   add-zsh-hook preexec _zsuggestion_preexec
   add-zsh-hook precmd _zsuggestion_precmd
+  add-zsh-hook precmd _zsuggestion_ensure_compsys
   add-zle-hook-widget line-init _zsuggestion_menu_line_init
   add-zle-hook-widget line-finish _zsuggestion_menu_line_finish
   add-zle-hook-widget line-pre-redraw _zsuggestion_menu_pre_redraw
@@ -2296,6 +2532,58 @@ if [[ -o interactive ]] && (( $+commands[zsuggestion] )); then
       _ZSUGGESTION_PREVIOUS_ENTER=accept-line
     zle -A "$_ZSUGGESTION_PREVIOUS_ENTER" _zsuggestion-native-enter
   fi
+  typeset -gA _ZSUGGESTION_ACCEPT_FALLBACK _ZSUGGESTION_ACCEPT_FALLBACK_STRING
+  () {
+    # Read the current bindings once. "bindkey -s" string bindings are
+    # replayed as input, since they have no widget to call.
+    local line key default
+    local -a words
+    local -A bound bound_string
+    local -A defaults=(
+      '^[[C' forward-char '^[OC' forward-char '^F' forward-char
+      '^E' end-of-line '^[[F' end-of-line '^[OF' end-of-line
+      '^[f' forward-word '^[[1;5C' forward-word
+    )
+    for line in "${(@f)$(bindkey -L 2>/dev/null)}"; do
+      words=( "${(@Q)${(z)line}}" )
+      [[ "${words[1]}" == bindkey ]] || continue
+      if [[ "${words[2]}" == -s ]]; then
+        (( ${+defaults[${words[3]}]} )) && bound_string[${words[3]}]="${words[4]}"
+      elif [[ "${words[2]}" != -* ]]; then
+        (( ${+defaults[${words[2]}]} )) && bound[${words[2]}]="${words[3]}"
+      fi
+    done
+    for key default in "${(@kv)defaults}"; do
+      [[ -n "${_ZSUGGESTION_ACCEPT_FALLBACK[${(g:c:)key}]:-}${_ZSUGGESTION_ACCEPT_FALLBACK_STRING[${(g:c:)key}]:-}" ]] &&
+        continue
+      if (( ${+bound_string[$key]} )); then
+        _ZSUGGESTION_ACCEPT_FALLBACK_STRING[${(g:c:)key}]="${(g:c:)bound_string[$key]}"
+        continue
+      fi
+      line="${bound[$key]:-}"
+      [[ -z "$line" || "$line" == undefined-key || "$line" == zsuggestion-accept-ghost* ]] &&
+        line="$default"
+      _ZSUGGESTION_ACCEPT_FALLBACK[${(g:c:)key}]="$line"
+    done
+  }
+
+  _zsuggestion_accept_fallback() {
+    if (( ${+_ZSUGGESTION_ACCEPT_FALLBACK_STRING[$KEYS]} )); then
+      zle -U -- "${_ZSUGGESTION_ACCEPT_FALLBACK_STRING[$KEYS]}"
+    else
+      zle "${_ZSUGGESTION_ACCEPT_FALLBACK[$KEYS]:-$1}"
+    fi
+  }
+  zle -N zsuggestion-accept-ghost _zsuggestion_accept_ghost
+  zle -N zsuggestion-accept-ghost-word _zsuggestion_accept_ghost_word
+  bindkey '^[[C' zsuggestion-accept-ghost
+  bindkey '^[OC' zsuggestion-accept-ghost
+  bindkey '^F' zsuggestion-accept-ghost
+  bindkey '^E' zsuggestion-accept-ghost
+  bindkey '^[[F' zsuggestion-accept-ghost
+  bindkey '^[OF' zsuggestion-accept-ghost
+  bindkey '^[f' zsuggestion-accept-ghost-word
+  bindkey '^[[1;5C' zsuggestion-accept-ghost-word
   zle -N zsuggestion-tab _zsuggestion_tab
   bindkey '^I' zsuggestion-tab
   zle -N zsuggestion-complete _zsuggestion_complete
@@ -2355,6 +2643,15 @@ fi
     .replace("__ZSUGGESTION_UI_MENU_WIDTH__", &menu_width)
     .replace("__ZSUGGESTION_UI_MAX_VISIBLE__", &max_visible)
     .replace("__ZSUGGESTION_COMPLETION_MAX_CANDIDATES__", &max_candidates)
+    .replace("__ZSUGGESTION_NATIVE_LIMIT__", &native_limit)
+    .replace(
+        "__ZSUGGESTION_AUTO_COMPINIT__",
+        if settings.completion.compinit { "1" } else { "0" },
+    )
+    .replace(
+        "__ZSUGGESTION_UI_MEASURE_PROMPT__",
+        if settings.ui.measure_prompt { "1" } else { "0" },
+    )
     .replace(
         "__ZSUGGESTION_UI_PROMPT_OFFSET__",
         &settings.ui.prompt_offset.to_string(),
@@ -2459,7 +2756,17 @@ mod tests {
         assert!(integration.contains("--format zsh-v3"));
         assert!(integration.contains("_ZSUGGESTION_MENU_REFRESH_TICKS=5"));
         assert!(integration.contains("zle -C zsuggestion-native-capture"));
-        assert!(integration.contains("descriptions+=(\"Zsh completion\")"));
+        assert!(
+            integration
+                .contains("builtin compadd -A __zsuggestion_hits -D __zsuggestion_hit_displays")
+        );
+        assert!(integration.contains("add-zsh-hook precmd _zsuggestion_ensure_compsys"));
+        assert!(integration.contains("(( 1 )) || return 0"));
+        assert!(integration.contains("zmodload zsh/zle"));
+        assert!(integration.contains("bindkey '^[[C' zsuggestion-accept-ghost"));
+        assert!(integration.contains("bindkey '^[f' zsuggestion-accept-ghost-word"));
+        assert!(!integration.contains("__ZSUGGESTION_NATIVE_LIMIT__"));
+        assert!(!integration.contains("__ZSUGGESTION_AUTO_COMPINIT__"));
         assert!(integration.contains("${(@)region_highlight:#*memo=zsuggestion*}"));
         assert!(integration.contains("_ZSUGGESTION_FOREIGN_HIGHLIGHTS"));
         assert!(integration.contains("_ZSUGGESTION_MENU_RESTORE_INDEX"));
@@ -2479,5 +2786,11 @@ mod tests {
         let integration = zsh_integration(&settings).unwrap();
         assert!(integration.contains("bindkey '^X' zsuggestion-complete"));
         assert!(integration.contains("bg=#3a3228"));
+
+        settings.completion.compinit = false;
+        settings.ui.measure_prompt = false;
+        let integration = zsh_integration(&settings).unwrap();
+        assert!(integration.contains("(( 0 )) || return 0"));
+        assert!(integration.contains("(( 0 && _ZSUGGESTION_PROMPT_QUERY ))"));
     }
 }

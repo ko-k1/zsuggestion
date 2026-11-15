@@ -10,9 +10,10 @@ native Zsh candidates, and full one-keystroke acceptance via Tab.
 
 ## Principles
 
-- Suggestions for installed commands and directories come first; per-command
-  flags, subcommands, and values follow, and recorded history always sinks to
-  the bottom of the menu.
+- Command first: installed commands are offered before any other tier, mirroring
+  ghost-complete. Per-command flags, subcommands, and values follow, then
+  filesystem matches, and recorded history always sinks to the bottom of the
+  menu.
 - Candidate providers are ordered tiers; lower tiers fill unused menu capacity
   but never outrank higher-confidence results.
 - The menu appears while typing and highlights the highest-ranked candidate.
@@ -65,10 +66,24 @@ The integration:
   history and installed commands. Escape restores only the current command's
   space-free base buffer; Enter executes the selected result, while Ctrl-C and
   each new prompt discard all fuzzy state.
-- Captures append-safe candidates from the configured Zsh completion system in
-  a forked completion context after about 30-60 ms idle and blends them into
-  the menu without blocking input.
+- Captures append-safe candidates from the Zsh completion system in a forked
+  completion context after about 30-60 ms idle and blends them into the menu
+  without blocking input. Like fzf-tab, it keeps each completion function's
+  descriptions (`commit -- record changes to repository`) and maps its tags to
+  `Sub`, `Opt`, `Value`, `File`, and `Dir` rows, so `git c`, `ls -`, and
+  `git checkout ` list subcommands, flags, and branches. When `.zshrc` has not
+  run `compinit`, zsuggestion loads it at the first prompt
+  (`completion.compinit = false` opts out).
 - Shows ranked candidates automatically as the command buffer changes.
+- Accepts the ghost text zsh-autosuggestions style: Right, End, Ctrl-F, and
+  Ctrl-E take the highlighted suggestion when the cursor is at the end of the
+  line, and Alt-F or Ctrl-Right take its next word. Elsewhere those keys keep
+  their previous widgets.
+- Anchors the popup under the word being completed, like an IDE completion
+  menu: zsuggestion asks the terminal where the prompt ends (falling back to
+  `ui.prompt_offset` when the terminal does not answer), measures display
+  width, rows show only the word being completed, and the popup shrinks to fit
+  its rows up to `ui.menu_width`.
 - Renders an nvim-style completion popup without window chrome: every row pairs
   its candidate with a dimmed description and a right-aligned kind badge
   (`Cmd`, `Hist`, `Native`, `File`, `Dir`, `Opt`, `Sub`, `Value`), the selected
@@ -184,6 +199,7 @@ The default configuration is written by `zsuggestion init zsh`:
 max_candidates = 8
 key = "ctrl-space"
 accept = "full"
+compinit = true
 
 [history]
 ignore_leading_space = true
@@ -192,6 +208,7 @@ successful_first = true
 [ui]
 menu_width = 64
 max_visible = 6
+measure_prompt = true
 prompt_offset = 2
 accent = "14"
 text = "7"
@@ -206,8 +223,10 @@ selected_source = "0"
 Ctrl-J, Ctrl-K, Ctrl-M, and Ctrl-N are reserved by the menu integration. The
 generated binding is refreshed when a new shell starts.
 UI colors accept ANSI palette indexes from `0` through `255` or exact `#RRGGBB`
-values. ANSI indexes follow the active terminal theme. `prompt_offset` is the
-visual width of the final prompt line before editable text. The menu follows the
+values. ANSI indexes follow the active terminal theme. With `measure_prompt`,
+zsuggestion reads the prompt width from a terminal cursor-position report at
+each new prompt; `prompt_offset` is the fallback visual width of the final
+prompt line before editable text. The menu follows the
 live letter cursor and clamps before the terminal's final column.
 
 Paths can be overridden for testing or custom deployments:

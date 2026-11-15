@@ -19,6 +19,7 @@ pub struct CompletionSettings {
     pub max_candidates: usize,
     pub accept: AcceptMode,
     pub key: String,
+    pub compinit: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -34,6 +35,7 @@ pub struct UiSettings {
     pub menu_width: usize,
     pub max_visible: usize,
     pub prompt_offset: usize,
+    pub measure_prompt: bool,
     pub accent: String,
     pub text: String,
     pub muted: String,
@@ -56,6 +58,7 @@ impl Default for CompletionSettings {
             max_candidates: 8,
             accept: AcceptMode::Full,
             key: "ctrl-space".to_owned(),
+            compinit: true,
         }
     }
 }
@@ -75,6 +78,7 @@ impl Default for UiSettings {
             menu_width: 64,
             max_visible: 6,
             prompt_offset: 2,
+            measure_prompt: true,
             accent: "14".to_owned(),
             text: "7".to_owned(),
             muted: "8".to_owned(),
@@ -183,6 +187,11 @@ key = "ctrl-space"
 # Ctrl-Space accepts the whole suggestion; Tab always advances one segment.
 accept = "full"
 
+# Load the Zsh completion system (compinit) when .zshrc has not, so flags,
+# subcommands, and values from installed Zsh completion functions appear in
+# the menu. Set to false to manage compinit yourself.
+compinit = true
+
 [history]
 # Match common shell history privacy behavior.
 ignore_leading_space = true
@@ -192,8 +201,12 @@ successful_first = true
 
 [ui]
 # ANSI palette indexes adapt to the active terminal theme. #RRGGBB is also valid.
+# Maximum popup width; the popup shrinks to fit its rows.
 menu_width = 64
 max_visible = 6
+# Ask the terminal where the prompt ends so the popup starts under the word
+# being completed. prompt_offset is the fallback prompt width.
+measure_prompt = true
 prompt_offset = 2
 accent = "14"
 text = "7"
