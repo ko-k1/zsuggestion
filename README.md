@@ -135,7 +135,9 @@ results arrive, duplicate displays are removed, and equal-rank rows keep their
 provider order.
 At every argument position zsuggestion offers bounded
 local filesystem matches, so path completion does not depend on a
-command-specific completion function. Root-command flags parsed from man pages
+command-specific completion function. In command position, an explicit path
+(`./`, `../`, `/`, or `~/`) lists directories first, then executables, then
+other files, so `./` suggests `./build/` and `./run.sh`. Root-command flags parsed from man pages
 or sandboxed `--help` output appear lazily with their descriptions ahead of
 duplicate native matches. Explicit command sections and documented option values
 from the same metadata provide cached root subcommand and enum completions. Quoted

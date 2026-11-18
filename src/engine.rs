@@ -376,13 +376,15 @@ pub fn filesystem_candidates(
     if cursor_byte != buffer.len() || !buffer.is_char_boundary(cursor_byte) {
         return Ok(Vec::new());
     }
-    let Some(argument_start) = current_argument_start(buffer) else {
+    // Argument positions accept any path. The command position accepts only
+    // explicit paths (`./run`, `../bin/x`, `/usr/bin/x`, `~/bin/x`), so plain
+    // command names never turn into filesystem guesses.
+    let argument_start = current_argument_start(buffer);
+    let command_position = argument_start.is_none();
+    let Some(token) = unescape_path_token(&buffer[argument_start.unwrap_or(0)..]) else {
         return Ok(Vec::new());
     };
-    let Some(token) = unescape_path_token(&buffer[argument_start..]) else {
-        return Ok(Vec::new());
-    };
-    if token.starts_with('-') {
+    if token.starts_with('-') || (command_position && !explicit_path_token(&token)) {
         return Ok(Vec::new());
     }
 
@@ -413,6 +415,7 @@ pub fn filesystem_candidates(
             continue;
         }
         let is_directory = file_type.is_dir() || (file_type.is_symlink() && child.path().is_dir());
+        let executable = command_position && !is_directory && is_executable(&child.path());
         let suffix = &name[name_prefix.len()..];
         let mut insert_text = escape_path_suffix(suffix);
         if token.is_empty() && name.starts_with('-') {
@@ -425,31 +428,46 @@ pub fn filesystem_candidates(
         if exact_file {
             insert_text.push(' ');
         }
-        matches.push((is_directory, name, insert_text, exact_file));
+        matches.push((is_directory, executable, name, insert_text, exact_file));
         if matches.len() >= MAX_DIRECTORY_ENTRIES {
             break;
         }
     }
-    matches.sort_unstable_by(|left, right| right.0.cmp(&left.0).then_with(|| left.1.cmp(&right.1)));
+    matches.sort_unstable_by(|left, right| {
+        right
+            .0
+            .cmp(&left.0)
+            .then_with(|| right.1.cmp(&left.1))
+            .then_with(|| left.2.cmp(&right.2))
+    });
     Ok(matches
         .into_iter()
-        .map(|(is_directory, _, insert_text, exact_file)| Candidate {
-            display: if exact_file {
-                buffer.to_owned()
-            } else {
-                format!("{buffer}{insert_text}")
+        .map(
+            |(is_directory, executable, _, insert_text, exact_file)| Candidate {
+                display: if exact_file {
+                    buffer.to_owned()
+                } else {
+                    format!("{buffer}{insert_text}")
+                },
+                description: if is_directory {
+                    "Directory"
+                } else if executable {
+                    "Executable"
+                } else {
+                    "File"
+                }
+                .to_owned(),
+                description_pending: false,
+                kind: if is_directory {
+                    CandidateKind::Directory
+                } else {
+                    CandidateKind::File
+                },
+                accept_text: next_segment(&insert_text),
+                insert_text,
+                source: CandidateSource::Filesystem,
             },
-            description: if is_directory { "Directory" } else { "File" }.to_owned(),
-            description_pending: false,
-            kind: if is_directory {
-                CandidateKind::Directory
-            } else {
-                CandidateKind::File
-            },
-            accept_text: next_segment(&insert_text),
-            insert_text,
-            source: CandidateSource::Filesystem,
-        })
+        )
         .collect())
 }
 
@@ -494,6 +512,24 @@ pub fn merge_filesystem_candidates(
             response.candidates.push(candidate);
         }
     }
+}
+
+fn explicit_path_token(token: &str) -> bool {
+    ["./", "../", "/", "~/"]
+        .iter()
+        .any(|prefix| token.starts_with(prefix))
+}
+
+#[cfg(unix)]
+fn is_executable(path: &Path) -> bool {
+    use std::os::unix::fs::PermissionsExt;
+    fs::metadata(path)
+        .is_ok_and(|metadata| metadata.is_file() && metadata.permissions().mode() & 0o111 != 0)
+}
+
+#[cfg(not(unix))]
+fn is_executable(_path: &Path) -> bool {
+    false
 }
 
 fn resolve_directory(directory_text: &str, cwd: &str) -> PathBuf {
@@ -924,6 +960,54 @@ mod tests {
                 .unwrap()
                 .is_empty()
         );
+    }
+
+    #[test]
+    fn completes_explicit_paths_in_command_position() {
+        let directory = tempdir().unwrap();
+        let cwd = directory.path().to_str().unwrap();
+        fs::create_dir(directory.path().join("build")).unwrap();
+        fs::write(directory.path().join("notes.txt"), "file").unwrap();
+        fs::write(directory.path().join("run.sh"), "#!/bin/sh").unwrap();
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            fs::set_permissions(
+                directory.path().join("run.sh"),
+                fs::Permissions::from_mode(0o755),
+            )
+            .unwrap();
+        }
+        fs::write(directory.path().join("build/app"), "file").unwrap();
+
+        let candidates = filesystem_candidates("./", 2, cwd).unwrap();
+        let displays: Vec<_> = candidates.iter().map(|c| c.display.as_str()).collect();
+        assert_eq!(displays, ["./build/", "./run.sh", "./notes.txt"]);
+        assert_eq!(candidates[0].kind, CandidateKind::Directory);
+        #[cfg(unix)]
+        assert_eq!(candidates[1].description, "Executable");
+        assert_eq!(candidates[2].description, "File");
+
+        let candidates = filesystem_candidates("./r", 3, cwd).unwrap();
+        assert_eq!(candidates.len(), 1);
+        assert_eq!(candidates[0].display, "./run.sh");
+
+        let candidates = filesystem_candidates("./build/", 8, cwd).unwrap();
+        assert_eq!(candidates[0].display, "./build/app");
+
+        let nested = directory.path().join("build");
+        let candidates = filesystem_candidates("../", 3, nested.to_str().unwrap()).unwrap();
+        assert!(candidates.iter().any(|c| c.display == "../run.sh"));
+
+        // Bare words and `.`/`..` alone stay command or history territory.
+        for buffer in ["run", ".", "..", "build/"] {
+            assert!(
+                filesystem_candidates(buffer, buffer.len(), cwd)
+                    .unwrap()
+                    .is_empty(),
+                "{buffer}"
+            );
+        }
     }
 
     #[test]
