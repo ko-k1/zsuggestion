@@ -10,9 +10,11 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::mpsc::{Receiver, SyncSender, TrySendError, sync_channel};
 use std::sync::{Arc, Mutex};
 use std::thread;
-use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
+use std::time::{Duration, Instant};
 
 use serde::{Deserialize, Serialize};
+
+use crate::clock::now_secs;
 
 const CACHE_VERSION: u32 = 4;
 const CACHE_MAX_BYTES: u64 = 2 * 1024 * 1024;
@@ -1600,13 +1602,6 @@ fn fingerprint_matches(job: &DescriptionJob) -> bool {
     fs::metadata(&job.path)
         .map(|metadata| fingerprint(&job.path, &metadata) == job.fingerprint)
         .unwrap_or(false)
-}
-
-fn now_secs() -> u64 {
-    SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .unwrap_or_default()
-        .as_secs()
 }
 
 fn valid_name(name: &str) -> bool {
