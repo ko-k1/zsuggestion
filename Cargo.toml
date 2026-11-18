@@ -2,27 +2,19 @@
 name = "zsuggestion"
 version = "0.3.0"
 edition = "2024"
-rust-version = "1.88"
+# 1.89 stabilized std::fs::File::{try_lock, unlock}.
+rust-version = "1.89"
 description = "Nvim-style shell suggestion popup for Zsh"
 repository = "https://github.com/ko-k1/zsuggestion"
-homepage = "https://github.com/ko-k1/zsuggestion"
 license = "MIT"
 readme = "README.md"
 keywords = ["shell", "completion", "zsh", "suggestions", "popup"]
 categories = ["command-line-utilities"]
-
-[lib]
-name = "zsuggestion"
-path = "src/lib.rs"
-
-[[bin]]
-name = "zsuggestion"
-path = "src/main.rs"
+include = ["/src", "/tests", "/docs", "/README.md", "/LICENSE"]
 
 [dependencies]
 anyhow = "1.0.103"
 clap = { version = "4.6.1", features = ["derive"] }
-fs2 = "0.4.3"
 libc = "0.2.177"
 rusqlite = { version = "0.37.0", features = ["bundled"] }
 serde = { version = "1.0.228", features = ["derive"] }
@@ -31,6 +23,14 @@ toml = "0.9.5"
 
 [dev-dependencies]
 tempfile = "3.23.0"
+
+[lints.rust]
+unsafe_op_in_unsafe_fn = "deny"
+unused_qualifications = "warn"
+
+[lints.clippy]
+dbg_macro = "warn"
+todo = "warn"
 
 [profile.release]
 lto = "thin"

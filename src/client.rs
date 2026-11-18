@@ -7,7 +7,6 @@ use std::thread;
 use std::time::{Duration, Instant};
 
 use anyhow::{Context, Result, bail};
-use fs2::FileExt;
 
 use crate::config::Paths;
 use crate::protocol::{PROTOCOL_VERSION, Request, RequestEnvelope, Response};
@@ -106,10 +105,10 @@ fn daemon_lock_is_available(paths: &Paths) -> bool {
     else {
         return false;
     };
-    if file.try_lock_exclusive().is_err() {
+    if file.try_lock().is_err() {
         return false;
     }
-    let _ = FileExt::unlock(&file);
+    let _ = file.unlock();
     true
 }
 

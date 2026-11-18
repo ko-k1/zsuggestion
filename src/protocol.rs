@@ -111,6 +111,21 @@ pub enum CandidateKind {
     Value,
 }
 
+impl CandidateKind {
+    /// The stable wire name, identical to the serde representation.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::History => "history",
+            Self::Command => "command",
+            Self::File => "file",
+            Self::Directory => "directory",
+            Self::Option => "option",
+            Self::Subcommand => "subcommand",
+            Self::Value => "value",
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 pub enum CandidateSource {
@@ -118,4 +133,50 @@ pub enum CandidateSource {
     Command,
     Filesystem,
     Help,
+}
+
+impl CandidateSource {
+    /// The stable wire name, identical to the serde representation.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::History => "history",
+            Self::Command => "command",
+            Self::Filesystem => "filesystem",
+            Self::Help => "help",
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn wire_names_match_serde() {
+        for kind in [
+            CandidateKind::History,
+            CandidateKind::Command,
+            CandidateKind::File,
+            CandidateKind::Directory,
+            CandidateKind::Option,
+            CandidateKind::Subcommand,
+            CandidateKind::Value,
+        ] {
+            assert_eq!(
+                serde_json::to_string(&kind).unwrap(),
+                format!("\"{}\"", kind.as_str())
+            );
+        }
+        for source in [
+            CandidateSource::History,
+            CandidateSource::Command,
+            CandidateSource::Filesystem,
+            CandidateSource::Help,
+        ] {
+            assert_eq!(
+                serde_json::to_string(&source).unwrap(),
+                format!("\"{}\"", source.as_str())
+            );
+        }
+    }
 }

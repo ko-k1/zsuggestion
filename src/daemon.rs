@@ -6,12 +6,12 @@ use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::thread;
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use std::time::Duration;
 
 use anyhow::{Context, Result, bail};
-use fs2::FileExt;
 
 use crate::VERSION;
+use crate::clock::now_ms;
 use crate::commands::CommandCatalog;
 use crate::config::{Paths, Settings};
 use crate::engine;
@@ -133,7 +133,7 @@ fn acquire_daemon_lock(path: &Path) -> Result<File> {
         .open(path)
         .with_context(|| format!("failed to open daemon lock {}", path.display()))?;
     fs::set_permissions(path, fs::Permissions::from_mode(0o600))?;
-    file.try_lock_exclusive().with_context(|| {
+    file.try_lock().with_context(|| {
         format!(
             "zsuggestion daemon is already running for {}",
             path.display()
@@ -298,14 +298,6 @@ fn dispatch(
     result.unwrap_or_else(|error| Response::Error {
         message: format!("{error:#}"),
     })
-}
-
-fn now_ms() -> i64 {
-    SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .unwrap_or_default()
-        .as_millis()
-        .min(i64::MAX as u128) as i64
 }
 
 fn write_response(stream: &mut UnixStream, response: &Response) -> Result<()> {

@@ -245,5 +245,37 @@ listening.
 ## Configuration
 
 Configuration is strict TOML with unknown fields rejected. Paths follow XDG
-locations by default and have explicit `ASTER_*` overrides. The initial daemon
+locations by default and have explicit `ZSUGGESTION_CONFIG`,
+`ZSUGGESTION_STATE_DIR`, and `ZSUGGESTION_SOCKET` overrides. The initial daemon
 loads configuration at startup; live config reload is planned.
+
+## Source Layout
+
+```text
+src/
+  main.rs            thin clap CLI; maps subcommands to library calls
+  lib.rs             crate root and module map
+  protocol.rs        versioned request/response types (PROTOCOL_VERSION)
+  client.rs          socket client; lazily starts and replaces the daemon
+  daemon.rs          socket server, lock, request validation and dispatch
+  engine.rs          tiered candidate providers, aliases, filesystem, fuzzy
+  store.rs           SQLite history store and Zsh history import
+  config.rs          strict TOML settings and XDG/override paths
+  clock.rs           shared wall-clock helpers
+  output.rs          JSON / NUL-separated completion output formats
+  preview.rs         bounded file and allowlisted command previews
+  shell.rs           renders the shell integration from its template
+  shell/
+    zsuggestion.zsh  Zsh frontend template (`__ZSUGGESTION_*__` placeholders)
+  commands/
+    mod.rs           CommandCatalog: inventory, prefix queries, worker queue
+    probe.rs         sandboxed, time-bounded `man` / `--help` subprocesses
+    parse.rs         conservative man/help parsers for options and subcommands
+    cache.rs         fingerprinted, owner-private JSON enrichment cache
+tests/
+  zsh_ui.rs          end-to-end ZLE test driven through tmux
+```
+
+Edit the Zsh frontend in `src/shell/zsuggestion.zsh`; it is embedded with
+`include_str!`, so a rebuild picks up changes. CI runs `zsh -n` on it, and a
+unit test syntax-checks the rendered output.
