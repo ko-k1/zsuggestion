@@ -241,7 +241,7 @@ impl Store {
         if content.len() as u64 > MAX_HISTORY_BYTES {
             bail!("history file grew beyond the import limit while reading");
         }
-        let content = String::from_utf8(content).context("history file is not valid UTF-8")?;
+        let content = decode_zsh_history(&content);
         let entries = parse_zsh_history(&content, ignore_leading_space)?;
 
         let transaction = self.connection.transaction()?;
@@ -279,6 +279,30 @@ impl Store {
             skipped: false,
         })
     }
+}
+
+/// Zsh writes `$HISTFILE` metafied: bytes 0x83..=0xa2 (and NUL) become 0x83
+/// followed by the byte XOR 0x20. Most UTF-8 continuation bytes fall in that
+/// range, so any non-ASCII command makes the raw file invalid UTF-8.
+/// Lines that still do not decode are dropped rather than failing the import.
+fn decode_zsh_history(raw: &[u8]) -> String {
+    const META: u8 = 0x83;
+    let mut bytes = Vec::with_capacity(raw.len());
+    let mut iter = raw.iter();
+    while let Some(&byte) = iter.next() {
+        if byte == META
+            && let Some(&next) = iter.next()
+        {
+            bytes.push(next ^ 0x20);
+        } else {
+            bytes.push(byte);
+        }
+    }
+    bytes
+        .split(|byte| *byte == b'\n')
+        .filter_map(|line| std::str::from_utf8(line).ok())
+        .collect::<Vec<_>>()
+        .join("\n")
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -468,12 +492,25 @@ mod tests {
     }
 
     #[test]
-    fn rejects_invalid_utf8_history() {
+    fn skips_invalid_utf8_history_lines() {
         let directory = tempdir().unwrap();
         let history = directory.path().join("history");
-        fs::write(&history, [0xff, 0xfe]).unwrap();
+        fs::write(
+            &history,
+            b": 1700000000:0;bad \xff\xfe\n: 1700000001:0;git status\n",
+        )
+        .unwrap();
         let mut store = Store::in_memory().unwrap();
-        assert!(store.import_zsh_history(&history, true).is_err());
+        let result = store.import_zsh_history(&history, true).unwrap();
+        assert_eq!(result.imported, 1);
+    }
+
+    #[test]
+    fn unmetafies_zsh_history() {
+        // "echo こんにちは" exactly as `fc -W` writes it.
+        let raw =
+            b"echo \xe3\x81\x83\xb3\xe3\x82\x83\xb3\xe3\x81\xab\xe3\x81\x83\x81\xe3\x81\xaf\n";
+        assert_eq!(decode_zsh_history(raw), "echo こんにちは\n");
     }
 
     #[test]

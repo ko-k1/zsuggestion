@@ -151,6 +151,9 @@ fn handle_connection(
     commands: &CommandCatalog,
     shutdown: &AtomicBool,
 ) -> Result<()> {
+    // BSD and macOS hand accepted sockets the listener's O_NONBLOCK, which
+    // would make the timed reads below fail immediately with WouldBlock.
+    stream.set_nonblocking(false)?;
     stream.set_read_timeout(Some(IO_TIMEOUT))?;
     stream.set_write_timeout(Some(IO_TIMEOUT))?;
 

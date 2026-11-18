@@ -439,8 +439,9 @@ fn command_preview_argv(line: &str) -> Result<(&str, Vec<String>)> {
         arguments.push("--icons=never".to_owned());
         arguments.push("--width=80".to_owned());
     } else if executable == "gls" || cfg!(target_os = "linux") {
+        // GNU ls only emits hyperlinks when asked (user flags are stripped
+        // above), and uutils ls rejects --hyperlink entirely.
         arguments.push("--color=never".to_owned());
-        arguments.push("--hyperlink=never".to_owned());
     }
     Ok((executable, arguments))
 }
@@ -903,11 +904,9 @@ if [[ -o interactive ]] && (( $+commands[zsuggestion] )); then
     local fd="$1" line style response_target
     local styled=$(( ${#_ZSUGGESTION_PREVIEW_COMMAND} > 0 ))
     local -a lines styles
-    if (( fd != _ZSUGGESTION_PREVIEW_FD )); then
-      zle -F "$fd" 2>/dev/null
-      exec {fd}<&-
-      return 0
-    fi
+    # Stale fd: whoever replaced it already unregistered and closed it. zle can
+    # still dispatch it in the same poll round, and the number may be reused.
+    (( fd == _ZSUGGESTION_PREVIEW_FD )) || return 0
     zle -F "$fd"
     if ! IFS= read -r -u "$fd" -d '' response_target ||
        [[ "$response_target" != "$_ZSUGGESTION_PREVIEW_TARGET" ]]; then
@@ -1462,7 +1461,7 @@ if [[ -o interactive ]] && (( $+commands[zsuggestion] )); then
     if [[ "$buffer" != *[[:space:]]* ]]; then
       [[ "$buffer" == [[:alnum:]_+-]## ]] || return 0
       for name in ${${(ok)aliases[(I)${(b)buffer}*]}[1,32]}; do
-        reply+=(--alias "${name}=${aliases[$name]}")
+        reply+=("--alias=${name}=${aliases[$name]}")
       done
       return 0
     fi
@@ -1470,7 +1469,7 @@ if [[ -o interactive ]] && (( $+commands[zsuggestion] )); then
     while (( depth++ < 8 )) && [[ -n "$word" && -z "${seen[$word]}" ]] &&
           (( ${+aliases[$word]} )); do
       seen[$word]=1
-      reply+=(--alias "${word}=${aliases[$word]}")
+      reply+=("--alias=${word}=${aliases[$word]}")
       word="${${aliases[$word]##[[:space:]]#}%%[[:space:]]*}"
     done
   }
@@ -1530,7 +1529,7 @@ if [[ -o interactive ]] && (( $+commands[zsuggestion] )); then
       _zsuggestion_menu_schedule
       return 0
     fi
-    LBUFFER+="${accept#"$_ZSUGGESTION_MENU_BUFFER"}"
+    LBUFFER+="$accept"
     if [[ ( "$source" == native || "$kind" == file || "$kind" == option ||
             "$kind" == subcommand || "$kind" == value ) &&
           "$BUFFER" == "$display" &&
@@ -1732,11 +1731,9 @@ if [[ -o interactive ]] && (( $+commands[zsuggestion] )); then
     local fd="$1" accept display description kind source pending response_pending
     local any_pending=0
     local -a accepts displays descriptions kinds sources
-    if (( fd != _ZSUGGESTION_MENU_REQUEST_FD )); then
-      zle -F "$fd" 2>/dev/null
-      exec {fd}<&-
-      return 0
-    fi
+    # Stale fd: whoever replaced it already unregistered and closed it. zle can
+    # still dispatch it in the same poll round, and the number may be reused.
+    (( fd == _ZSUGGESTION_MENU_REQUEST_FD )) || return 0
     if [[ "$_ZSUGGESTION_MENU_BUFFER" != "$_ZSUGGESTION_MENU_INFLIGHT_BUFFER" ]] ||
        (( _ZSUGGESTION_MENU_INFLIGHT_GENERATION != _ZSUGGESTION_MENU_GENERATION )); then
       zle -F "$fd" 2>/dev/null
@@ -1795,11 +1792,9 @@ if [[ -o interactive ]] && (( $+commands[zsuggestion] )); then
   _zsuggestion_native_request_ready() {
     local fd="$1" accept display description kind
     local -a accepts displays descriptions kinds
-    if (( fd != _ZSUGGESTION_NATIVE_REQUEST_FD )); then
-      zle -F "$fd" 2>/dev/null
-      exec {fd}<&-
-      return 0
-    fi
+    # Stale fd: whoever replaced it already unregistered and closed it. zle can
+    # still dispatch it in the same poll round, and the number may be reused.
+    (( fd == _ZSUGGESTION_NATIVE_REQUEST_FD )) || return 0
     if [[ "$_ZSUGGESTION_MENU_BUFFER" != "$_ZSUGGESTION_NATIVE_INFLIGHT_BUFFER" ]] ||
        (( _ZSUGGESTION_NATIVE_INFLIGHT_GENERATION != _ZSUGGESTION_MENU_GENERATION )); then
       zle -F "$fd" 2>/dev/null
@@ -2072,7 +2067,8 @@ if [[ -o interactive ]] && (( $+commands[zsuggestion] )); then
   _zsuggestion_menu_tick() {
     local fd="$1" tick query_fd buffer cwd cursor reply
     local -a alias_args
-    if (( fd != _ZSUGGESTION_MENU_TICK_FD )) || ! IFS= read -r -u "$fd" tick; then
+    (( fd == _ZSUGGESTION_MENU_TICK_FD )) || return 0
+    if ! IFS= read -r -u "$fd" tick; then
       zle -F "$fd" 2>/dev/null
       exec {fd}<&-
       _ZSUGGESTION_MENU_TICK_FD=-1
@@ -2083,17 +2079,20 @@ if [[ -o interactive ]] && (( $+commands[zsuggestion] )); then
       (( _ZSUGGESTION_PREVIEW_TICKS++ ))
       if (( _ZSUGGESTION_PREVIEW_FD < 0 && _ZSUGGESTION_PREVIEW_TICKS >= 2 )); then
         local preview_fd preview_target="$_ZSUGGESTION_PREVIEW_TARGET"
+        # Emit everything at once: the handler reads to EOF, so output that
+        # trickled in would block ZLE until the preview command finished.
         exec {preview_fd}< <(
-          print -rn -- "$preview_target"$'\0'
+          local preview_output
           if [[ -n "$_ZSUGGESTION_PREVIEW_COMMAND" ]]; then
-            command zsuggestion preview-command \
+            preview_output="$(command zsuggestion preview-command \
               --line "$_ZSUGGESTION_PREVIEW_COMMAND" \
-              --cwd "$PWD" 2>/dev/null
+              --cwd "$PWD" 2>/dev/null)"
           else
-            command zsuggestion preview-file \
+            preview_output="$(command zsuggestion preview-file \
               --path "$_ZSUGGESTION_PREVIEW_PATH" \
-              --cwd "$PWD" 2>/dev/null
+              --cwd "$PWD" 2>/dev/null)"
           fi
+          print -rn -- "$preview_target"$'\0'"$preview_output"
         )
         _ZSUGGESTION_PREVIEW_FD="$preview_fd"
         _ZSUGGESTION_PREVIEW_PID=$!
