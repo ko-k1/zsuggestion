@@ -258,7 +258,12 @@ src/
   protocol.rs        versioned request/response types (PROTOCOL_VERSION)
   client.rs          socket client; lazily starts and replaces the daemon
   daemon.rs          socket server, lock, request validation and dispatch
-  engine.rs          tiered candidate providers, aliases, filesystem, fuzzy
+  engine/
+    mod.rs           complete(): tiered providers, history, segment acceptance
+    alias.rs         alias validation, alias candidates, leading-alias expansion
+    context.rs       root-option, subcommand, and option-value contexts
+    filesystem.rs    bounded path candidates and merging behind higher tiers
+    fuzzy.rs         fzf-ranked history and command search
   store.rs           SQLite history store and Zsh history import
   config.rs          strict TOML settings and XDG/override paths
   clock.rs           shared wall-clock helpers
