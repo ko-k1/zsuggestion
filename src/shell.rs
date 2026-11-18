@@ -134,6 +134,35 @@ mod tests {
     }
 
     #[test]
+    fn rendered_integration_is_valid_zsh() {
+        use std::io::Write;
+        use std::process::{Command, Stdio};
+
+        let Ok(mut child) = Command::new("zsh")
+            .args(["-n", "-f"])
+            .stdin(Stdio::piped())
+            .stderr(Stdio::piped())
+            .spawn()
+        else {
+            eprintln!("skipping zsh syntax check because zsh is unavailable");
+            return;
+        };
+        let script = zsh_integration(&Settings::default()).unwrap();
+        child
+            .stdin
+            .take()
+            .unwrap()
+            .write_all(script.as_bytes())
+            .unwrap();
+        let output = child.wait_with_output().unwrap();
+        assert!(
+            output.status.success(),
+            "zsh -n rejected the integration:\n{}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+    }
+
+    #[test]
     fn labels_completion_keys() {
         assert_eq!(completion_key_label("ctrl-space"), "Ctrl-Space");
         assert_eq!(completion_key_label("ctrl-x"), "Ctrl-X");

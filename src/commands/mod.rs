@@ -2,8 +2,9 @@
 //!
 //! [`CommandCatalog`] answers prefix queries for command names, options,
 //! subcommands, and option values without blocking: unknown commands are
-//! queued for background workers that [`probe`] `man`/`--help`, [`parse`] the
-//! output, and persist results in the fingerprinted JSON [`cache`].
+//! queued for background workers that probe `man`/`--help` (`probe`), parse
+//! the output (`parse`), and persist results in a fingerprinted JSON cache
+//! (`cache`).
 
 mod cache;
 mod parse;

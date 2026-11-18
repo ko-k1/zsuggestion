@@ -9,7 +9,6 @@ use std::thread;
 use std::time::Duration;
 
 use anyhow::{Context, Result, bail};
-use fs2::FileExt;
 
 use crate::VERSION;
 use crate::clock::now_ms;
@@ -134,7 +133,7 @@ fn acquire_daemon_lock(path: &Path) -> Result<File> {
         .open(path)
         .with_context(|| format!("failed to open daemon lock {}", path.display()))?;
     fs::set_permissions(path, fs::Permissions::from_mode(0o600))?;
-    file.try_lock_exclusive().with_context(|| {
+    file.try_lock().with_context(|| {
         format!(
             "zsuggestion daemon is already running for {}",
             path.display()
