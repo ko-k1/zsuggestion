@@ -10,7 +10,7 @@ license = "MIT"
 readme = "README.md"
 keywords = ["shell", "completion", "zsh", "suggestions", "popup"]
 categories = ["command-line-utilities"]
-include = ["/src", "/tests", "/docs", "/README.md", "/LICENSE"]
+include = ["/src", "/test", "/docs", "/README.md", "/CHANGELOG.md", "/LICENSE"]
 
 [dependencies]
 anyhow = "1.0.103"
@@ -23,6 +23,10 @@ toml = "1.2.1"
 
 [dev-dependencies]
 tempfile = "3.23.0"
+
+[[test]]
+name = "zle_integration"
+path = "test/zle_integration.rs"
 
 [lints.rust]
 unsafe_op_in_unsafe_fn = "deny"

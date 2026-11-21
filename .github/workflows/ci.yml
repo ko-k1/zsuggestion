@@ -24,6 +24,8 @@ jobs:
         os: [ubuntu-latest, macos-latest]
     steps:
       - uses: actions/checkout@v7
+      - name: Check agent guidance
+        run: python3 init-agents.py --check
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: clippy,rustfmt
