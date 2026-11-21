@@ -7,9 +7,10 @@ use std::thread;
 
 use anyhow::{Result, bail};
 
-use super::{MAX_BUFFER_BYTES, history_description, sanitize_display};
+use super::MAX_BUFFER_BYTES;
 use crate::commands::CommandCatalog;
 use crate::config::Settings;
+use crate::engine::history::candidate;
 use crate::protocol::{Candidate, CandidateKind, CandidateSource, CompletionResponse};
 use crate::store::Store;
 
@@ -36,15 +37,7 @@ pub fn fuzzy(
         store.history_inventory(cwd, FUZZY_HISTORY_LIMIT, settings.history.successful_first)?
     {
         if seen.insert(history.command.clone()) {
-            pool.push(Candidate {
-                display: sanitize_display(&history.command),
-                description: history_description(history.uses, history.same_cwd),
-                description_pending: false,
-                kind: CandidateKind::History,
-                insert_text: history.command.clone(),
-                accept_text: history.command,
-                source: CandidateSource::History,
-            });
+            pool.push(candidate(&history.command, history.uses, history.same_cwd));
         }
     }
     for command in commands.inventory() {

@@ -9,6 +9,7 @@ mod alias;
 mod context;
 mod filesystem;
 mod fuzzy;
+mod history;
 
 use anyhow::{Result, bail};
 
@@ -185,36 +186,24 @@ pub fn complete(
     // Tier 3: recorded history fills any remaining capacity, always last.
     if candidates.len() < limit {
         let remaining = limit - candidates.len();
-        let history =
-            store.history_candidates(buffer, cwd, remaining, settings.history.successful_first)?;
-        for history in history {
-            let Some(suffix) = history.command.strip_prefix(buffer) else {
-                continue;
-            };
-            if suffix.is_empty() {
-                continue;
-            }
-            let display = sanitize_display(&history.command);
+        for mut entry in history::candidates(
+            store,
+            buffer,
+            cwd,
+            remaining,
+            settings.history.successful_first,
+        )? {
             if candidates
                 .iter()
-                .any(|candidate| candidate.display == display)
+                .any(|candidate| candidate.display == entry.display)
             {
                 continue;
             }
-            let insert_text = suffix.to_owned();
-            let accept_text = match settings.completion.accept {
-                AcceptMode::Segment => next_segment(suffix),
-                AcceptMode::Full => insert_text.clone(),
+            entry.accept_text = match settings.completion.accept {
+                AcceptMode::Segment => next_segment(&entry.insert_text),
+                AcceptMode::Full => entry.insert_text.clone(),
             };
-            candidates.push(Candidate {
-                display,
-                description: history_description(history.uses, history.same_cwd),
-                description_pending: false,
-                kind: CandidateKind::History,
-                insert_text,
-                accept_text,
-                source: CandidateSource::History,
-            });
+            candidates.push(entry);
             if candidates.len() == limit {
                 break;
             }
@@ -235,27 +224,6 @@ fn valid_command_prefix(buffer: &str) -> bool {
         && buffer
             .bytes()
             .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_' | b'+'))
-}
-
-fn history_description(uses: usize, same_cwd: bool) -> String {
-    match (uses, same_cwd) {
-        (1, true) => "used here".to_owned(),
-        (1, false) => "used once".to_owned(),
-        (uses, true) => format!("used {uses}x, here"),
-        (uses, false) => format!("used {uses}x"),
-    }
-}
-
-fn sanitize_display(value: &str) -> String {
-    let mut display = String::with_capacity(value.len());
-    for character in value.chars() {
-        if character.is_control() {
-            display.extend(character.escape_default());
-        } else {
-            display.push(character);
-        }
-    }
-    display
 }
 
 pub fn next_segment(suffix: &str) -> String {
@@ -330,6 +298,7 @@ mod tests {
     use super::*;
     use crate::commands::{CommandCatalog, CommandEntry, OptionMatch, SubcommandMatch, ValueMatch};
     use crate::config::Settings;
+    use crate::engine::history::{description as history_description, sanitize_display};
     use crate::store::Store;
 
     #[test]

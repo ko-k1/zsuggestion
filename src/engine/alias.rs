@@ -6,7 +6,8 @@ use std::collections::HashSet;
 
 use anyhow::{Result, bail};
 
-use super::{sanitize_display, valid_command_prefix};
+use super::valid_command_prefix;
+use crate::engine::history::sanitize_display;
 use crate::protocol::{Alias, Candidate, CandidateKind, CandidateSource};
 
 const MAX_ALIASES: usize = 64;
