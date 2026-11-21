@@ -1,4 +1,4 @@
-# Documentation Index
+# Documentation index
 
 ## Project
 
@@ -12,7 +12,7 @@
 - [README](../README.md) — installation, Zsh setup, commands, and
   configuration.
 
-## Agent Guidance
+## Agent guidance
 
 - [AGENTS.md](../AGENTS.md) — canonical repository-wide instructions.
 - [Agent guidance model](../.agents/README.md) — rules, skills, references, and

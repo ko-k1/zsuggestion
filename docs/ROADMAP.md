@@ -28,7 +28,7 @@ Filesystem candidates are the conservative default at argument positions.
 Other dynamic providers must be selected by a known argument type; zsuggestion
 should abstain when it cannot justify the candidate kind.
 
-## Non-Goals
+## Non-goals
 
 - Predicting broad command intent in the interactive path.
 - Executing a suggestion automatically.
