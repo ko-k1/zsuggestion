@@ -13,10 +13,12 @@ mod history;
 
 use anyhow::{Result, bail};
 
-use crate::commands::CommandCatalog;
+use crate::catalog::CommandCatalog;
 use crate::config::{AcceptMode, Settings};
-use crate::protocol::{Alias, Candidate, CandidateKind, CandidateSource, CompletionResponse};
-use crate::store::Store;
+use crate::persistence::Store;
+use crate::transport::protocol::{
+    Alias, Candidate, CandidateKind, CandidateSource, CompletionResponse,
+};
 
 pub use filesystem::{filesystem_candidates, merge_filesystem_candidates};
 pub use fuzzy::fuzzy;
@@ -296,10 +298,10 @@ pub fn next_segment(suffix: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::commands::{CommandCatalog, CommandEntry, OptionMatch, SubcommandMatch, ValueMatch};
+    use crate::catalog::{CommandCatalog, CommandEntry, OptionMatch, SubcommandMatch, ValueMatch};
     use crate::config::Settings;
-    use crate::engine::history::{description as history_description, sanitize_display};
-    use crate::store::Store;
+    use crate::persistence::Store;
+    use crate::providers::history::{description as history_description, sanitize_display};
 
     #[test]
     fn accepts_one_path_segment() {

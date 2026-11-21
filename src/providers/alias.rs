@@ -7,8 +7,8 @@ use std::collections::HashSet;
 use anyhow::{Result, bail};
 
 use super::valid_command_prefix;
-use crate::engine::history::sanitize_display;
-use crate::protocol::{Alias, Candidate, CandidateKind, CandidateSource};
+use crate::providers::history::sanitize_display;
+use crate::transport::protocol::{Alias, Candidate, CandidateKind, CandidateSource};
 
 const MAX_ALIASES: usize = 64;
 
@@ -97,10 +97,10 @@ pub(super) fn expand_leading_alias(buffer: &str, aliases: &[Alias]) -> Option<St
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::commands::{CommandCatalog, CommandEntry, OptionMatch, SubcommandMatch};
+    use crate::catalog::{CommandCatalog, CommandEntry, OptionMatch, SubcommandMatch};
     use crate::config::Settings;
-    use crate::engine::complete;
-    use crate::store::Store;
+    use crate::persistence::Store;
+    use crate::providers::complete;
 
     fn alias(name: &str, value: &str) -> Alias {
         Alias {

@@ -5,8 +5,10 @@ use anyhow::{Context, Result, anyhow, bail};
 use clap::{Parser, Subcommand, ValueEnum};
 use zsuggestion::config::{Paths, Settings};
 use zsuggestion::output::{self, OutputFormat};
-use zsuggestion::protocol::{Alias, Request, Response};
-use zsuggestion::{client, clock, daemon, preview, shell};
+use zsuggestion::shell;
+use zsuggestion::transport::protocol::{Alias, Request, Response};
+use zsuggestion::transport::{client, daemon};
+use zsuggestion::{clock, preview};
 
 /// Upper bound for command text and buffers read from arguments or stdin.
 const MAX_INPUT_BYTES: u64 = 64 * 1024;

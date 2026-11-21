@@ -9,7 +9,7 @@ use std::time::{Duration, Instant};
 use anyhow::{Context, Result, bail};
 
 use crate::config::Paths;
-use crate::protocol::{PROTOCOL_VERSION, Request, RequestEnvelope, Response};
+use crate::transport::protocol::{PROTOCOL_VERSION, Request, RequestEnvelope, Response};
 
 const CONNECT_TIMEOUT: Duration = Duration::from_secs(5);
 const IO_TIMEOUT: Duration = Duration::from_secs(1);

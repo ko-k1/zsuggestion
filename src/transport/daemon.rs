@@ -11,12 +11,12 @@ use std::time::Duration;
 use anyhow::{Context, Result, bail};
 
 use crate::VERSION;
+use crate::catalog::CommandCatalog;
 use crate::clock::now_ms;
-use crate::commands::CommandCatalog;
 use crate::config::{Paths, Settings};
-use crate::engine;
-use crate::protocol::{PROTOCOL_VERSION, Request, RequestEnvelope, Response};
-use crate::store::Store;
+use crate::persistence::Store;
+use crate::providers;
+use crate::transport::protocol::{PROTOCOL_VERSION, Request, RequestEnvelope, Response};
 
 const MAX_REQUEST_BYTES: u64 = 1024 * 1024;
 const MAX_RESPONSE_BYTES: usize = 1024 * 1024;
@@ -248,7 +248,7 @@ fn dispatch(
             }
             let mut completion = {
                 let store = store.lock().expect("store lock poisoned");
-                engine::complete(
+                providers::complete(
                     &store,
                     commands,
                     &buffer,
@@ -262,15 +262,15 @@ fn dispatch(
             let limit = limit
                 .unwrap_or(settings.completion.max_candidates)
                 .min(settings.completion.max_candidates);
-            let paths = engine::filesystem_candidates(&buffer, cursor_byte, &cwd)?;
-            engine::merge_filesystem_candidates(&mut completion, paths, limit);
+            let paths = providers::filesystem_candidates(&buffer, cursor_byte, &cwd)?;
+            providers::merge_filesystem_candidates(&mut completion, paths, limit);
             Ok(Response::Completion(completion))
         }
         Request::Fuzzy { query, cwd, limit } => {
             if cwd.len() > MAX_PATH_BYTES {
                 bail!("working directory is too long");
             }
-            let completion = engine::fuzzy(
+            let completion = providers::fuzzy(
                 &store.lock().expect("store lock poisoned"),
                 commands,
                 &query,

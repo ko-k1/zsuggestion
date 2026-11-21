@@ -8,11 +8,11 @@ use std::thread;
 use anyhow::{Result, bail};
 
 use super::MAX_BUFFER_BYTES;
-use crate::commands::CommandCatalog;
+use crate::catalog::CommandCatalog;
 use crate::config::Settings;
-use crate::engine::history::candidate;
-use crate::protocol::{Candidate, CandidateKind, CandidateSource, CompletionResponse};
-use crate::store::Store;
+use crate::persistence::Store;
+use crate::providers::history::candidate;
+use crate::transport::protocol::{Candidate, CandidateKind, CandidateSource, CompletionResponse};
 
 const FUZZY_HISTORY_LIMIT: usize = 4096;
 

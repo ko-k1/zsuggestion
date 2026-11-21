@@ -8,7 +8,7 @@ use std::path::{Path, PathBuf};
 use anyhow::Result;
 
 use super::next_segment;
-use crate::protocol::{Candidate, CandidateKind, CandidateSource, CompletionResponse};
+use crate::transport::protocol::{Candidate, CandidateKind, CandidateSource, CompletionResponse};
 
 const MAX_DIRECTORY_ENTRIES: usize = 1024;
 

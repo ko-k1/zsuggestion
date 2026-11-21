@@ -97,27 +97,36 @@ daemon loads configuration at startup; live reload is planned.
 src/
   main.rs            thin clap CLI; maps subcommands to library calls
   lib.rs             crate root and module map
-  protocol.rs        versioned request/response types
-  client.rs          socket client; lazily starts the daemon
-  daemon.rs          socket server, lock, request validation and dispatch
-  engine/
+  clock.rs           wall-clock helpers shared by the CLI, daemon, and caches
+  config/            strict TOML settings and XDG/override paths
+    mod.rs           Settings, Paths, defaults, validation
+  output/            JSON / NUL-separated completion output formats
+    mod.rs           OutputFormat, write_completion
+  preview/           bounded file and allowlisted command previews
+    mod.rs           write_file_preview, write_command_preview
+  shell/             renders the shell integration from its template
+    mod.rs           ZSH_TEMPLATE and placeholder substitution
+    zsuggestion.zsh  Zsh frontend template
+  transport/         versioned JSON protocol over Unix socket
+    mod.rs           client, daemon, protocol module map
+    client.rs        socket client; lazily starts the daemon
+    daemon.rs        socket server, lock, request validation and dispatch
+    protocol.rs      versioned request/response types
+  catalog/           command inventory and lazy help/man enrichment
+    mod.rs           CommandCatalog, prefix queries, worker queue
+    known.rs         authored descriptions and shell builtins
+    parse.rs         conservative man/help parsers for options and subcommands
+    probe.rs         sandboxed, time-bounded man / --help subprocesses
+    cache.rs         fingerprinted, owner-private JSON enrichment cache
+  providers/         tiered candidate providers behind complete()
     mod.rs           complete(): tiered providers, history, segment acceptance
     alias.rs         alias validation, alias candidates, leading-alias expansion
     context.rs       root-option, subcommand, and option-value contexts
     filesystem.rs    bounded path candidates merged behind higher tiers
     fuzzy.rs         fzf-ranked history and command search
-  store.rs           SQLite history store and Zsh history import
-  config.rs          strict TOML settings and XDG/override paths
-  output.rs          JSON / NUL-separated completion output formats
-  preview.rs         bounded file and allowlisted command previews
-  shell.rs           renders the shell integration from its template
-  shell/
-    zsuggestion.zsh  Zsh frontend template
-  commands/
-    mod.rs           command inventory, prefix queries, worker queue
-    probe.rs         sandboxed, time-bounded man / --help subprocesses
-    parse.rs         conservative man/help parsers for options and subcommands
-    cache.rs         fingerprinted, owner-private JSON enrichment cache
+    history.rs       recorded-history candidates
+  persistence/       SQLite history store and Zsh history import
+    mod.rs           Store, HistoryCandidate, ImportResult, import
 tests/
   zsh_ui.rs          end-to-end ZLE test driven through tmux
 ```

@@ -10,7 +10,7 @@ use anyhow::Result;
 use crate::config::{Settings, completion_key_sequence};
 
 /// The unrendered Zsh integration template.
-pub const ZSH_TEMPLATE: &str = include_str!("shell/zsuggestion.zsh");
+pub const ZSH_TEMPLATE: &str = include_str!("zsuggestion.zsh");
 
 /// Renders the Zsh integration with every placeholder substituted.
 pub fn zsh_integration(settings: &Settings) -> Result<String> {

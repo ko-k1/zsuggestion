@@ -2,26 +2,24 @@
 //!
 //! The crate is split into a shared per-host daemon and thin shell clients:
 //!
-//! - [`protocol`]: versioned request/response types exchanged over the socket.
-//! - [`client`]: connects to (and lazily starts) the daemon.
-//! - [`daemon`]: socket server that owns the [`store`] and [`commands`] catalog.
-//! - [`engine`]: tiered candidate providers used by the daemon.
-//! - [`commands`]: installed-command inventory and lazy help/man enrichment.
-//! - [`store`]: SQLite-backed shared history.
+//! - [`catalog`]: installed-command inventory and lazy help/man enrichment.
+//! - [`clock`]: wall-clock helpers shared by the CLI, daemon, and caches.
 //! - [`config`]: settings and filesystem locations.
+//! - [`output`]: completion response serialization formats.
+//! - [`persistence`]: SQLite-backed shared history.
+//! - [`preview`]: bounded file and command previews for the inline menu.
+//! - [`providers`]: tiered candidate providers used by the daemon.
 //! - [`shell`]: shell integration scripts emitted by `zsuggestion init`.
-//! - [`output`] and [`preview`]: CLI-side rendering for the shell frontend.
+//! - [`transport`]: versioned JSON protocol over Unix socket (client + daemon).
 
-pub mod client;
+pub mod catalog;
 pub mod clock;
-pub mod commands;
 pub mod config;
-pub mod daemon;
-pub mod engine;
 pub mod output;
+pub mod persistence;
 pub mod preview;
-pub mod protocol;
+pub mod providers;
 pub mod shell;
-pub mod store;
+pub mod transport;
 
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");

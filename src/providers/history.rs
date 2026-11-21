@@ -6,8 +6,8 @@
 
 use anyhow::Result;
 
-use crate::protocol::{Candidate, CandidateKind, CandidateSource};
-use crate::store::Store;
+use crate::persistence::Store;
+use crate::transport::protocol::{Candidate, CandidateKind, CandidateSource};
 
 pub(super) fn candidates(
     store: &Store,
@@ -87,7 +87,7 @@ pub(super) fn sanitize_display(value: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::store::Store;
+    use crate::persistence::Store;
 
     #[test]
     fn describes_history_usage_and_directory() {

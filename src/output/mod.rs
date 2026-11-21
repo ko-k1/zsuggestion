@@ -12,7 +12,7 @@ use std::io::Write;
 use anyhow::Result;
 use clap::ValueEnum;
 
-use crate::protocol::CompletionResponse;
+use crate::transport::protocol::CompletionResponse;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
 pub enum OutputFormat {
@@ -77,7 +77,7 @@ fn bool_str(value: bool) -> &'static str {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::protocol::{Candidate, CandidateKind, CandidateSource};
+    use crate::transport::protocol::{Candidate, CandidateKind, CandidateSource};
 
     fn response() -> CompletionResponse {
         CompletionResponse {
