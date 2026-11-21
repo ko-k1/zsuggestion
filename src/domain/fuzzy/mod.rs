@@ -10,8 +10,8 @@ use anyhow::{Result, bail};
 use super::MAX_BUFFER_BYTES;
 use crate::catalog::CommandCatalog;
 use crate::config::Settings;
+use crate::domain::completion::tiers::history::candidate;
 use crate::persistence::Store;
-use crate::providers::history::candidate;
 use crate::transport::protocol::{Candidate, CandidateKind, CandidateSource, CompletionResponse};
 
 const FUZZY_HISTORY_LIMIT: usize = 4096;

@@ -1,9 +1,9 @@
 //! Conservative recognition of root-option, subcommand, and option-value
 //! contexts. Each parser returns `None` for anything involving shell syntax.
 
-use super::valid_command_prefix;
+use crate::domain::valid_command_prefix;
 
-pub(super) fn option_context(buffer: &str) -> Option<(&str, &str)> {
+pub(crate) fn option_context(buffer: &str) -> Option<(&str, &str)> {
     if !safe_structured_buffer(buffer) {
         return None;
     }
@@ -20,7 +20,7 @@ pub(super) fn option_context(buffer: &str) -> Option<(&str, &str)> {
     Some((command, prefix))
 }
 
-pub(super) fn subcommand_context(buffer: &str) -> Option<(&str, &str)> {
+pub(crate) fn subcommand_context(buffer: &str) -> Option<(&str, &str)> {
     if !safe_structured_buffer(buffer) {
         return None;
     }
@@ -37,7 +37,7 @@ pub(super) fn subcommand_context(buffer: &str) -> Option<(&str, &str)> {
     Some((command, prefix))
 }
 
-pub(super) fn value_context(buffer: &str) -> Option<(&str, &str, &str)> {
+pub(crate) fn value_context(buffer: &str) -> Option<(&str, &str, &str)> {
     if !safe_structured_buffer(buffer) {
         return None;
     }

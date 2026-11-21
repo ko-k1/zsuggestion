@@ -8,14 +8,14 @@ use std::os::unix::fs::{MetadataExt, OpenOptionsExt};
 use std::path::Path;
 use std::sync::atomic::Ordering;
 
-use super::parse::{sanitize_description, valid_option_spelling};
-use super::{
+use super::super::{
     CACHE_MAX_BYTES, CACHE_VERSION, CachedDescription, DescriptionCache, DescriptionJob,
     ExecutableFingerprint, MAX_OPTION_COUNT, MAX_SUBCOMMAND_COUNT, MAX_VALUE_COUNT, MISS_TTL,
     SUCCESS_TTL, TEMP_SEQUENCE, valid_subcommand_name, valid_value,
 };
+use super::parse::{sanitize_description, valid_option_spelling};
 
-pub(super) fn load_cache(path: &Path) -> DescriptionCache {
+pub(crate) fn load_cache(path: &Path) -> DescriptionCache {
     let Ok(metadata) = fs::metadata(path) else {
         return DescriptionCache::default();
     };
@@ -75,7 +75,7 @@ pub(super) fn load_cache(path: &Path) -> DescriptionCache {
     cache
 }
 
-pub(super) fn save_cache(path: &Path, cache: &DescriptionCache) -> std::io::Result<()> {
+pub(crate) fn save_cache(path: &Path, cache: &DescriptionCache) -> std::io::Result<()> {
     let mut bounded = cache.clone();
     let bytes = loop {
         let bytes = serde_json::to_vec(&bounded)?;
@@ -111,7 +111,7 @@ pub(super) fn save_cache(path: &Path, cache: &DescriptionCache) -> std::io::Resu
     result
 }
 
-pub(super) fn cache_is_fresh(cached: &CachedDescription, now: u64) -> bool {
+pub(crate) fn cache_is_fresh(cached: &CachedDescription, now: u64) -> bool {
     let ttl = if !cached.options.is_empty()
         || !cached.subcommands.is_empty()
         || !cached.option_values.is_empty()
@@ -123,7 +123,7 @@ pub(super) fn cache_is_fresh(cached: &CachedDescription, now: u64) -> bool {
     now >= cached.checked_at_secs && now - cached.checked_at_secs <= ttl.as_secs()
 }
 
-pub(super) fn fingerprint(path: &Path, metadata: &fs::Metadata) -> ExecutableFingerprint {
+pub(crate) fn fingerprint(path: &Path, metadata: &fs::Metadata) -> ExecutableFingerprint {
     ExecutableFingerprint {
         path: path.to_path_buf(),
         size: metadata.len(),
@@ -137,7 +137,7 @@ pub(super) fn fingerprint(path: &Path, metadata: &fs::Metadata) -> ExecutableFin
     }
 }
 
-pub(super) fn fingerprint_matches(job: &DescriptionJob) -> bool {
+pub(crate) fn fingerprint_matches(job: &DescriptionJob) -> bool {
     fs::metadata(&job.path)
         .map(|metadata| fingerprint(&job.path, &metadata) == job.fingerprint)
         .unwrap_or(false)

@@ -14,8 +14,8 @@ use crate::VERSION;
 use crate::catalog::CommandCatalog;
 use crate::clock::now_ms;
 use crate::config::{Paths, Settings};
+use crate::domain;
 use crate::persistence::Store;
-use crate::providers;
 use crate::transport::protocol::{PROTOCOL_VERSION, Request, RequestEnvelope, Response};
 
 const MAX_REQUEST_BYTES: u64 = 1024 * 1024;
@@ -248,7 +248,7 @@ fn dispatch(
             }
             let mut completion = {
                 let store = store.lock().expect("store lock poisoned");
-                providers::complete(
+                domain::complete(
                     &store,
                     commands,
                     &buffer,
@@ -262,15 +262,15 @@ fn dispatch(
             let limit = limit
                 .unwrap_or(settings.completion.max_candidates)
                 .min(settings.completion.max_candidates);
-            let paths = providers::filesystem_candidates(&buffer, cursor_byte, &cwd)?;
-            providers::merge_filesystem_candidates(&mut completion, paths, limit);
+            let paths = domain::filesystem_candidates(&buffer, cursor_byte, &cwd)?;
+            domain::merge_filesystem_candidates(&mut completion, paths, limit);
             Ok(Response::Completion(completion))
         }
         Request::Fuzzy { query, cwd, limit } => {
             if cwd.len() > MAX_PATH_BYTES {
                 bail!("working directory is too long");
             }
-            let completion = providers::fuzzy(
+            let completion = domain::fuzzy(
                 &store.lock().expect("store lock poisoned"),
                 commands,
                 &query,

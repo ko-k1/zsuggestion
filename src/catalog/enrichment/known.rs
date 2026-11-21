@@ -5,7 +5,7 @@
 
 use std::path::Path;
 
-pub(super) fn description(name: &str) -> Option<&'static str> {
+pub(crate) fn description(name: &str) -> Option<&'static str> {
     Some(match name {
         "ansible" => "Define and run automation tasks",
         "appwrite" => "Manage Appwrite projects and services",
@@ -45,7 +45,7 @@ pub(super) fn description(name: &str) -> Option<&'static str> {
     })
 }
 
-pub(super) fn fallback(path: &Path) -> String {
+pub(crate) fn fallback(path: &Path) -> String {
     let path = path.to_string_lossy();
     if path.contains("/.cargo/bin/") {
         "Executable installed by Cargo".to_owned()
@@ -58,7 +58,7 @@ pub(super) fn fallback(path: &Path) -> String {
     }
 }
 
-pub(super) const SHELL_BUILTINS: &[(&str, &str)] = &[
+pub(crate) const SHELL_BUILTINS: &[(&str, &str)] = &[
     ("alias", "Define or display shell aliases"),
     ("autoload", "Mark shell functions for automatic loading"),
     ("bg", "Resume jobs in the background"),

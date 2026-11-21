@@ -9,7 +9,7 @@ use anyhow::Result;
 use crate::persistence::Store;
 use crate::transport::protocol::{Candidate, CandidateKind, CandidateSource};
 
-pub(super) fn candidates(
+pub(crate) fn candidates(
     store: &Store,
     prefix: &str,
     cwd: &str,
@@ -51,7 +51,7 @@ pub(super) fn candidates(
 
 /// Builds an unsuffixed history candidate for fuzzy mode, where the query
 /// replaces the whole line rather than appending to a typed prefix.
-pub(super) fn candidate(command: &str, uses: usize, same_cwd: bool) -> Candidate {
+pub(crate) fn candidate(command: &str, uses: usize, same_cwd: bool) -> Candidate {
     Candidate {
         display: sanitize_display(command),
         description: description(uses, same_cwd),
@@ -63,7 +63,7 @@ pub(super) fn candidate(command: &str, uses: usize, same_cwd: bool) -> Candidate
     }
 }
 
-pub(super) fn description(uses: usize, same_cwd: bool) -> String {
+pub(crate) fn description(uses: usize, same_cwd: bool) -> String {
     match (uses, same_cwd) {
         (1, true) => "used here".to_owned(),
         (1, false) => "used once".to_owned(),
@@ -72,7 +72,7 @@ pub(super) fn description(uses: usize, same_cwd: bool) -> String {
     }
 }
 
-pub(super) fn sanitize_display(value: &str) -> String {
+pub(crate) fn sanitize_display(value: &str) -> String {
     let mut display = String::with_capacity(value.len());
     for character in value.chars() {
         if character.is_control() {

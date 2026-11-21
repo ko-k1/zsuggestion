@@ -1,7 +1,7 @@
 # Plan: namespace & skeleton refactor (polished)
 
 ## Status
-Ready for review — no files touched yet.
+Executed and verified — committed as `f8e8e5c` on branch `refactor/namespace-skeleton`.
 
 ## Branch
 `refactor/namespace-skeleton` created from `ecf0975`, working tree clean.

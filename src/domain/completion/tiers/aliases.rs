@@ -6,8 +6,8 @@ use std::collections::HashSet;
 
 use anyhow::{Result, bail};
 
-use super::valid_command_prefix;
-use crate::providers::history::sanitize_display;
+use crate::domain::completion::tiers::history::sanitize_display;
+use crate::domain::valid_command_prefix;
 use crate::transport::protocol::{Alias, Candidate, CandidateKind, CandidateSource};
 
 const MAX_ALIASES: usize = 64;
@@ -20,7 +20,7 @@ const MAX_ALIAS_DEPTH: usize = 8;
 
 const MAX_ALIAS_DESCRIPTION_CHARS: usize = 72;
 
-pub(super) fn validate_aliases(aliases: &[Alias]) -> Result<()> {
+pub(crate) fn validate_aliases(aliases: &[Alias]) -> Result<()> {
     if aliases.len() > MAX_ALIASES {
         bail!("completion request carries more than {MAX_ALIASES} aliases");
     }
@@ -32,7 +32,7 @@ pub(super) fn validate_aliases(aliases: &[Alias]) -> Result<()> {
     Ok(())
 }
 
-pub(super) fn alias_candidates(prefix: &str, aliases: &[Alias], limit: usize) -> Vec<Candidate> {
+pub(crate) fn alias_candidates(prefix: &str, aliases: &[Alias], limit: usize) -> Vec<Candidate> {
     let mut matches: Vec<&Alias> = aliases
         .iter()
         .filter(|alias| alias.name.starts_with(prefix) && valid_command_prefix(&alias.name))
@@ -73,7 +73,7 @@ fn alias_description(value: &str) -> String {
 /// Expands the command word of `buffer` the way Zsh expands a leading alias,
 /// repeating while the expansion's own first word is another alias. Returns
 /// `None` while the command word is still being typed or names no alias.
-pub(super) fn expand_leading_alias(buffer: &str, aliases: &[Alias]) -> Option<String> {
+pub(crate) fn expand_leading_alias(buffer: &str, aliases: &[Alias]) -> Option<String> {
     let mut expanded = buffer.to_owned();
     let mut seen = HashSet::new();
     let mut changed = false;
@@ -99,8 +99,8 @@ mod tests {
     use super::*;
     use crate::catalog::{CommandCatalog, CommandEntry, OptionMatch, SubcommandMatch};
     use crate::config::Settings;
+    use crate::domain::complete;
     use crate::persistence::Store;
-    use crate::providers::complete;
 
     fn alias(name: &str, value: &str) -> Alias {
         Alias {

@@ -14,17 +14,17 @@ use std::sync::atomic::Ordering;
 use std::thread;
 use std::time::{Duration, Instant};
 
+use super::super::{DescriptionJob, Enrichment, TEMP_SEQUENCE};
 use super::parse::{
     parse_help_description, parse_man_description, parse_option_values, parse_options,
     parse_subcommands,
 };
-use super::{DescriptionJob, Enrichment, TEMP_SEQUENCE};
 
 const OUTPUT_MAX_BYTES: u64 = 64 * 1024;
 const MAN_TIMEOUT: Duration = Duration::from_millis(1_500);
 const HELP_TIMEOUT: Duration = Duration::from_millis(1_000);
 
-pub(super) fn discover_enrichment(job: &DescriptionJob, output_dir: &Path) -> Enrichment {
+pub(crate) fn discover_enrichment(job: &DescriptionJob, output_dir: &Path) -> Enrichment {
     let mut enrichment = man_enrichment(&job.name, output_dir).unwrap_or_default();
     if (enrichment.description.is_none()
         || enrichment.options.is_empty()
@@ -129,7 +129,7 @@ fn help_enrichment(job: &DescriptionJob, output_dir: &Path) -> Option<Enrichment
     })
 }
 
-pub(super) fn run_bounded(
+pub(crate) fn run_bounded(
     mut command: Command,
     output_dir: &Path,
     timeout: Duration,

@@ -5,7 +5,7 @@
 
 use std::collections::HashSet;
 
-use super::{
+use super::super::{
     MAX_OPTION_COUNT, MAX_OPTION_SPELLING_BYTES, MAX_SUBCOMMAND_COUNT, MAX_VALUE_COUNT,
     OptionMatch, OptionValues, SubcommandMatch, ValueMatch, valid_subcommand_name, valid_value,
 };
