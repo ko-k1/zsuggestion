@@ -43,7 +43,7 @@ The current slice includes:
   itself when tmux is unavailable.
 - `cargo test --doc --locked` passes (the crate has no doc tests).
 - `RUSTDOCFLAGS="-D warnings" cargo doc --no-deps --locked` passes.
-- `python3 init-agents.py --check` passes (10 Skills across the generated
+- `python3 init-agents.py --check` passes (15 Skills across the generated
   harness paths).
 - `cargo package --locked --allow-dirty` passes and includes the documentation
   set. `cargo package --locked` itself requires a clean worktree.

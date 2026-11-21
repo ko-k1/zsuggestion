@@ -262,4 +262,5 @@ python3 init-agents.py --check
 ```
 
 `--init` is for initial generation in a fresh checkout; it refuses to overwrite
-edited guidance files.
+edited guidance files, but preserves existing `.agents/journal.md` and
+`.agents/pending.md`.
