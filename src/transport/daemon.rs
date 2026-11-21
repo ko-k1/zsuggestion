@@ -246,7 +246,7 @@ fn dispatch(
             if cwd.len() > MAX_PATH_BYTES {
                 bail!("working directory is too long");
             }
-            let mut completion = {
+            let completion = {
                 let store = store.lock().expect("store lock poisoned");
                 domain::complete(
                     &store,
@@ -259,11 +259,6 @@ fn dispatch(
                     settings,
                 )?
             };
-            let limit = limit
-                .unwrap_or(settings.completion.max_candidates)
-                .min(settings.completion.max_candidates);
-            let paths = domain::filesystem_candidates(&buffer, cursor_byte, &cwd)?;
-            domain::merge_filesystem_candidates(&mut completion, paths, limit);
             Ok(Response::Completion(completion))
         }
         Request::Fuzzy { query, cwd, limit } => {

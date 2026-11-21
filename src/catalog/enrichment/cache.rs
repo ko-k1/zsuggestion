@@ -11,8 +11,9 @@ use std::sync::atomic::Ordering;
 use super::super::{
     CACHE_MAX_BYTES, CACHE_VERSION, CachedDescription, DescriptionCache, DescriptionJob,
     ExecutableFingerprint, MAX_OPTION_COUNT, MAX_SUBCOMMAND_COUNT, MAX_VALUE_COUNT, MISS_TTL,
-    SUCCESS_TTL, TEMP_SEQUENCE, valid_subcommand_name, valid_value,
+    SUCCESS_TTL, valid_subcommand_name, valid_value,
 };
+use super::TEMP_SEQUENCE;
 use super::parse::{sanitize_description, valid_option_spelling};
 
 pub(crate) fn load_cache(path: &Path) -> DescriptionCache {

@@ -85,25 +85,19 @@ pub fn structured_tier(
                 .entries
                 .into_iter()
                 .filter_map(|value| {
-                    let suffix = value.value.strip_prefix(prefix)?;
-                    let insertion = if suffix.is_empty() { " " } else { suffix };
-                    Some(Candidate {
-                        display: if suffix.is_empty() {
-                            buffer.to_owned()
-                        } else {
-                            format!("{buffer}{suffix}")
-                        },
-                        description: if value.description.is_empty() {
-                            format!("Value for {option}")
-                        } else {
-                            value.description
-                        },
-                        description_pending: false,
-                        kind: CandidateKind::Value,
-                        insert_text: insertion.to_owned(),
-                        accept_text: insertion.to_owned(),
-                        source: CandidateSource::Help,
-                    })
+                    let description = if value.description.is_empty() {
+                        format!("Value for {option}")
+                    } else {
+                        value.description
+                    };
+                    structured_candidate(
+                        buffer,
+                        prefix,
+                        &value.value,
+                        description,
+                        CandidateKind::Value,
+                        true,
+                    )
                 })
                 .collect()
         } else if let Some((command, prefix)) = option_context(context) {
@@ -113,19 +107,14 @@ pub fn structured_tier(
                 .entries
                 .into_iter()
                 .filter_map(|option| {
-                    let suffix = option.spelling.strip_prefix(prefix)?;
-                    if suffix.is_empty() {
-                        return None;
-                    }
-                    Some(Candidate {
-                        display: format!("{buffer}{suffix}"),
-                        description: option.description,
-                        description_pending: false,
-                        kind: CandidateKind::Option,
-                        insert_text: suffix.to_owned(),
-                        accept_text: suffix.to_owned(),
-                        source: CandidateSource::Help,
-                    })
+                    structured_candidate(
+                        buffer,
+                        prefix,
+                        &option.spelling,
+                        option.description,
+                        CandidateKind::Option,
+                        false,
+                    )
                 })
                 .collect()
         } else if let Some((command, prefix)) = subcommand_context(context) {
@@ -135,21 +124,14 @@ pub fn structured_tier(
                 .entries
                 .into_iter()
                 .filter_map(|subcommand| {
-                    let suffix = subcommand.name.strip_prefix(prefix)?;
-                    let insertion = if suffix.is_empty() { " " } else { suffix };
-                    Some(Candidate {
-                        display: if suffix.is_empty() {
-                            buffer.to_owned()
-                        } else {
-                            format!("{buffer}{suffix}")
-                        },
-                        description: subcommand.description,
-                        description_pending: false,
-                        kind: CandidateKind::Subcommand,
-                        insert_text: insertion.to_owned(),
-                        accept_text: insertion.to_owned(),
-                        source: CandidateSource::Help,
-                    })
+                    structured_candidate(
+                        buffer,
+                        prefix,
+                        &subcommand.name,
+                        subcommand.description,
+                        CandidateKind::Subcommand,
+                        true,
+                    )
                 })
                 .collect()
         } else {
@@ -159,6 +141,38 @@ pub fn structured_tier(
     }
 
     (candidates, enrichment_pending)
+}
+
+/// Builds a candidate that appends the untyped suffix of `value` to `buffer`.
+///
+/// Exact matches either insert a trailing space (values and subcommands) or
+/// are suppressed (options, where the full spelling is already on screen).
+fn structured_candidate(
+    buffer: &str,
+    prefix: &str,
+    value: &str,
+    description: String,
+    kind: CandidateKind,
+    exact_inserts_space: bool,
+) -> Option<Candidate> {
+    let suffix = value.strip_prefix(prefix)?;
+    if suffix.is_empty() && !exact_inserts_space {
+        return None;
+    }
+    let insertion = if suffix.is_empty() { " " } else { suffix };
+    Some(Candidate {
+        display: if suffix.is_empty() {
+            buffer.to_owned()
+        } else {
+            format!("{buffer}{suffix}")
+        },
+        description,
+        description_pending: false,
+        kind,
+        insert_text: insertion.to_owned(),
+        accept_text: insertion.to_owned(),
+        source: CandidateSource::Help,
+    })
 }
 
 /// Tier 3: recorded history fills any remaining capacity, always last.

@@ -16,9 +16,10 @@ Zsh / future PTY UI
    zsuggestion daemon
         |
         +-- command inventory and parsed help (highest priority)
-        +-- history provider
+        +-- recorded history
+        +-- bounded filesystem matches
         +-- lazy man/help description workers
-        +-- filesystem and dynamic providers (planned)
+        +-- additional dynamic providers (planned)
         |
         v
    SQLite shared state
@@ -51,17 +52,18 @@ successful exits, frequency, and command text as deterministic tie-breakers.
 
 Providers are queried in strict order:
 
-1. Parsed and cached root-command options, subcommands, and values.
-2. Shell aliases, then installed commands and shell builtins for the first
-   token.
+1. Shell aliases, then installed commands and shell builtins for the command
+   word.
+2. Parsed and cached root-command options, subcommands, and values for the
+   current command context.
 3. Exact-prefix command history.
 4. Bounded local filesystem matches at argument positions.
 5. Append-safe candidates from the active Zsh completion system.
 6. No result.
 
 The rendered menu is re-sorted into presentation tiers before display:
-installed commands first, then directories and files, then per-command options,
-subcommands, and values, then remaining native candidates, with recorded
+installed commands first, then per-command options, subcommands, and values,
+then directories and files, then remaining native candidates, with recorded
 history always last so personal history never buries fresh command content.
 
 Shell aliases are shell-local, so the frontend sends them with each request
@@ -95,9 +97,12 @@ daemon loads configuration at startup; live reload is planned.
 
 ```text
 src/
-  main.rs            thin clap CLI; maps subcommands to library calls
+  main.rs            thin CLI entry point; parses and dispatches to cli::run
   lib.rs             crate root and module map
-  clock.rs           wall-clock helpers shared by the CLI, daemon, and caches
+  cli/               clap definitions, request building, response handling
+    mod.rs
+  clock/             wall-clock helpers shared by the CLI, daemon, and caches
+    mod.rs
   config/            strict TOML settings and XDG/override paths
     mod.rs           Settings, Paths, defaults, validation
   output/            JSON / NUL-separated completion output formats
@@ -113,22 +118,30 @@ src/
     daemon.rs        socket server, lock, request validation and dispatch
     protocol.rs      versioned request/response types
   catalog/           command inventory and lazy help/man enrichment
-    mod.rs           CommandCatalog, prefix queries, worker queue
-    known.rs         authored descriptions and shell builtins
-    parse.rs         conservative man/help parsers for options and subcommands
-    probe.rs         sandboxed, time-bounded man / --help subprocesses
-    cache.rs         fingerprinted, owner-private JSON enrichment cache
-  providers/         tiered candidate providers behind complete()
-    mod.rs           complete(): tiered providers, history, segment acceptance
-    alias.rs         alias validation, alias candidates, leading-alias expansion
-    context.rs       root-option, subcommand, and option-value contexts
-    filesystem.rs    bounded path candidates merged behind higher tiers
-    fuzzy.rs         fzf-ranked history and command search
-    history.rs       recorded-history candidates
+    mod.rs           CommandCatalog, prefix queries, enrichment state
+    inventory.rs     PATH discovery, cache hydration, background workers
+    enrichment/      help/man probing, parsing, and persistence
+      mod.rs
+      known.rs       authored descriptions and shell builtins
+      parse.rs       conservative man/help parsers
+      probe.rs       sandboxed, time-bounded man / --help subprocesses
+      cache.rs       fingerprinted, owner-private JSON enrichment cache
+  domain/            completion orchestration
+    mod.rs           complete(), fuzzy(), request validation, tier merging
+    completion/      tiered candidate providers
+      mod.rs         command, structured, and history tiers
+      context.rs     root-option, subcommand, and option-value contexts
+      segments.rs    segment acceptance for history candidates
+      tiers/
+        aliases.rs   alias validation, candidates, leading-alias expansion
+        filesystem.rs bounded path candidates merged behind higher tiers
+        history.rs   recorded-history candidates
+    fuzzy/           fzf-ranked history and command search
+      mod.rs
   persistence/       SQLite history store and Zsh history import
     mod.rs           Store, HistoryCandidate, ImportResult, import
-tests/
-  zsh_ui.rs          end-to-end ZLE test driven through tmux
+test/
+  zle_integration.rs end-to-end ZLE test driven through tmux
 ```
 
 Edit the Zsh frontend in `src/shell/zsuggestion.zsh`; it is embedded with

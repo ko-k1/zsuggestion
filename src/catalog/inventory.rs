@@ -8,8 +8,7 @@ use std::env;
 use std::fs;
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
-use std::sync::atomic::AtomicU64;
-use std::sync::mpsc::{Receiver, SyncSender, TrySendError, sync_channel};
+use std::sync::mpsc::{Receiver, SyncSender, sync_channel};
 use std::sync::{Arc, Mutex};
 use std::thread;
 
@@ -23,8 +22,6 @@ use crate::clock::now_secs;
 
 const QUEUE_CAPACITY: usize = 64;
 const WORKER_COUNT: usize = 2;
-
-static TEMP_SEQUENCE: AtomicU64 = AtomicU64::new(0);
 
 impl CommandCatalog {
     pub fn discover(cache_file: PathBuf) -> Self {
@@ -117,33 +114,6 @@ impl CommandCatalog {
             queue,
         }
     }
-}
-
-fn enqueue_if_unsettled(
-    state: &mut EnrichmentState,
-    job: Option<&DescriptionJob>,
-    queue: Option<&SyncSender<DescriptionJob>>,
-) -> bool {
-    let (Some(job), Some(queue)) = (job, queue) else {
-        return false;
-    };
-    if state.settled.contains(&job.name) {
-        return false;
-    }
-    if state.pending.insert(job.name.clone()) {
-        match queue.try_send(job.clone()) {
-            Ok(()) => {}
-            Err(TrySendError::Full(_)) => {
-                state.pending.remove(&job.name);
-            }
-            Err(TrySendError::Disconnected(_)) => {
-                state.pending.remove(&job.name);
-                state.settled.insert(job.name.clone());
-                return false;
-            }
-        }
-    }
-    true
 }
 
 fn start_workers(

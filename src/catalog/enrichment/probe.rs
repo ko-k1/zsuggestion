@@ -14,7 +14,8 @@ use std::sync::atomic::Ordering;
 use std::thread;
 use std::time::{Duration, Instant};
 
-use super::super::{DescriptionJob, Enrichment, TEMP_SEQUENCE};
+use super::super::{DescriptionJob, Enrichment};
+use super::TEMP_SEQUENCE;
 use super::parse::{
     parse_help_description, parse_man_description, parse_option_values, parse_options,
     parse_subcommands,

@@ -6,17 +6,11 @@
 //! the output (`parse`), and persist results in a fingerprinted JSON cache
 //! (`cache`).
 //!
-//! Some items here are referenced by sibling modules via `super::super::`
-//! paths; `dead_code` is allowed because cross-module usage isn't always
-//! visible to the lint.
-#![allow(dead_code)]
-
 mod enrichment;
 mod inventory;
 
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::path::PathBuf;
-use std::sync::atomic::AtomicU64;
 use std::sync::mpsc::{SyncSender, TrySendError};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
@@ -33,8 +27,6 @@ const MAX_VALUE_COUNT: usize = 128;
 const MAX_VALUE_BYTES: usize = 128;
 const SUCCESS_TTL: Duration = Duration::from_secs(30 * 24 * 60 * 60);
 const MISS_TTL: Duration = Duration::from_secs(24 * 60 * 60);
-
-static TEMP_SEQUENCE: AtomicU64 = AtomicU64::new(0);
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CommandEntry {

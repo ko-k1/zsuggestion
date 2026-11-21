@@ -11,15 +11,14 @@ mod fuzzy;
 use anyhow::{Result, bail};
 
 use crate::catalog::CommandCatalog;
-use crate::config::{AcceptMode, Settings};
+use crate::config::Settings;
 use crate::persistence::Store;
 use crate::transport::protocol::{Alias, Candidate, CompletionResponse};
 
-pub use completion::tiers::filesystem::{filesystem_candidates, merge_filesystem_candidates};
 pub use completion::{command_tier, history_tier, structured_tier};
 pub use fuzzy::fuzzy;
 
-use completion::tiers::aliases;
+use completion::tiers::{aliases, filesystem};
 
 const MAX_BUFFER_BYTES: usize = 64 * 1024;
 
@@ -79,17 +78,13 @@ pub fn complete(
     // Tier 3: recorded history fills any remaining capacity, always last.
     if candidates.len() < limit {
         let remaining = limit - candidates.len();
-        for mut entry in history_tier(store, buffer, cwd, remaining, settings)? {
+        for entry in history_tier(store, buffer, cwd, remaining, settings)? {
             if candidates
                 .iter()
                 .any(|candidate| candidate.display == entry.display)
             {
                 continue;
             }
-            entry.accept_text = match settings.completion.accept {
-                AcceptMode::Segment => completion::segments::next_segment(&entry.insert_text),
-                AcceptMode::Full => entry.insert_text.clone(),
-            };
             candidates.push(entry);
             if candidates.len() == limit {
                 break;
@@ -97,12 +92,17 @@ pub fn complete(
         }
     }
 
-    let response = CompletionResponse {
+    let mut response = CompletionResponse {
         replace_start_byte: cursor_byte,
         replace_end_byte: cursor_byte,
         candidates,
         enrichment_pending,
     };
+
+    // Filesystem matches slot between structured candidates and history, which
+    // the merge preserves as the final tier.
+    let paths = filesystem::filesystem_candidates(buffer, cursor_byte, cwd)?;
+    filesystem::merge_filesystem_candidates(&mut response, paths, limit);
 
     Ok(response)
 }
@@ -119,7 +119,7 @@ pub(crate) fn valid_command_prefix(buffer: &str) -> bool {
 mod tests {
     use super::*;
     use crate::catalog::{CommandCatalog, CommandEntry, OptionMatch, SubcommandMatch, ValueMatch};
-    use crate::config::Settings;
+    use crate::config::{AcceptMode, Settings};
     use crate::domain::completion::tiers::history::description as history_description;
     use crate::persistence::Store;
     use crate::transport::protocol::{CandidateKind, CandidateSource};
@@ -338,6 +338,30 @@ mod tests {
         assert_eq!(completion.candidates[0].display, "atlas");
         assert_eq!(completion.candidates[0].accept_text, "as");
         assert_eq!(completion.candidates[0].kind, CandidateKind::Command);
+    }
+
+    #[test]
+    fn completes_filesystem_paths_after_structured_candidates() {
+        let store = Store::in_memory().unwrap();
+        let directory = tempfile::tempdir().unwrap();
+        std::fs::write(directory.path().join("alpha-file"), "file").unwrap();
+        let buffer = "tool ";
+
+        let completion = complete(
+            &store,
+            &CommandCatalog::default(),
+            buffer,
+            buffer.len(),
+            directory.path().to_str().unwrap(),
+            None,
+            &[],
+            &Settings::default(),
+        )
+        .unwrap();
+
+        assert!(completion.candidates.iter().any(|candidate| {
+            candidate.display == "tool alpha-file" && candidate.kind == CandidateKind::File
+        }));
     }
 
     #[test]

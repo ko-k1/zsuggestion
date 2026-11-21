@@ -33,8 +33,8 @@ The current slice includes:
 ## Verified
 
 - `cargo fmt --all -- --check`, `cargo clippy`, and `cargo test` pass
-  (76 library tests, 2 binary tests, 1 ZLE integration test; the integration
-  test skips when tmux is unavailable).
+  (81 library tests and 11 ZLE integration tests; the integration binary exits
+  early when tmux or zsh is unavailable).
 - `zsh -n` passes on the shell integration.
 - `cargo package` passes and includes the documentation set.
 
