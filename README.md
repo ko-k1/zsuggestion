@@ -3,44 +3,31 @@
 zsuggestion is a natural shell completion system that puts command suggestions
 first. It would rather show nothing than offer a completion it cannot justify.
 
+## Overview
+
 The project is in early development. The current vertical slice provides a
 shared local daemon, SQLite-backed command history, Zsh history import, and
 an inline completion menu, ghost text, command discovery, lazy descriptions,
 native Zsh candidates, and full one-keystroke acceptance via Tab.
 
-## Principles
+See [docs/VISION.md](docs/VISION.md) for purpose and principles, and
+[docs/STATUS.md](docs/STATUS.md) for current implementation state and known
+limits.
 
-- Command first: installed commands are offered before any other tier, mirroring
-  ghost-complete. Per-command flags, subcommands, and values follow, then
-  filesystem matches, and recorded history always sinks to the bottom of the
-  menu.
-- Candidate providers are ordered tiers; lower tiers fill unused menu capacity
-  but never outrank higher-confidence results.
-- The menu appears while typing and highlights the highest-ranked candidate.
-- Tab fills the entire selected candidate; the configured completion key
-  (default Ctrl-Space) accepts it as well.
-- No per-command shell completion scripts are required.
-- Every host has one shared daemon and one history database.
-- tmux panes and concurrent SSH shells remain lightweight clients.
-- Silence is preferable to an uncertain completion.
+## Getting Started
 
-## Build
+### Build
 
 ```sh
 cargo build --release
 cargo install --path .
 ```
 
-Or install the published package:
-
-```sh
-cargo install zsuggestion
-```
-
 zsuggestion currently targets Unix systems because its shared transport is an
-owner-private Unix socket. Inline fuzzy mode requires `fzf` on the host.
+owner-private Unix socket. Inline fuzzy mode requires `fzf` on the host. The
+crate is not yet published on crates.io; install from a checkout.
 
-## Zsh Setup
+### Zsh Setup
 
 Add one integration line to `.zshrc`:
 
@@ -250,44 +237,29 @@ Run `zsuggestion doctor` to print the resolved paths and verify daemon
 connectivity. Custom state and socket paths must live beneath directories owned
 by the current user and inaccessible to group and other users.
 
-## Status
+## Documentation
 
-Implemented:
+See [docs/INDEX.md](docs/INDEX.md). Release history is in
+[CHANGELOG.md](CHANGELOG.md).
 
-- Shared auto-started daemon.
-- Versioned JSON protocol over an owner-private Unix socket.
-- SQLite WAL history shared by all shells on a host.
-- Change-detected Zsh history import.
-- Recency-first history ranking, with current directory, success, and usage as
-  tie-breakers.
-- Cached `PATH` command inventory, shell builtins, semantic command icons, and
-  authored descriptions for common tools.
-- Lazy command-description enrichment from exact man pages and sandboxed
-  `--help` output, with executable-fingerprinted persistent caching.
-- Cached root subcommands and documented option values parsed from explicit help
-  sections, including common Clap, Cobra, Click, and argparse layouts.
-- Asynchronous native Zsh candidate capture for append-safe options,
-  subcommands, paths, aliases, and other configured completion sources.
-- Prefix-only completion; Tab fills the highlighted candidate exactly.
-- Cursor-anchored, scrolling ZLE popup with ghost text, descriptions, kind
-  badges, highlighted matches, a position scrollbar, and configurable colors.
-- Debounced asynchronous completion requests that never block character input.
-- Zsh native-completion fallback.
+## Project Policies
 
-Description discovery never runs on the completion request path. An unresolved
-visible command keeps its origin fallback, is queued on a bounded worker pool,
-and is refreshed in the menu when metadata becomes ready. zsuggestion checks
-the exact man page first. On macOS, it may then run `--help` through
-`sandbox-exec` with network and writes denied, an empty environment, bounded
-output, and a hard timeout. Direct executable probing is disabled on platforms
-without that sandbox. Cached misses expire after one day; descriptions expire
-after 30 days or immediately when the executable path, identity, size, mode, or
-timestamps change.
+- [Security](SECURITY.md)
+- [Contributing](CONTRIBUTING.md)
+- [Support](SUPPORT.md)
+- [Code of Conduct](CODE_OF_CONDUCT.md)
 
-Planned:
+## Agent Guidance
 
-- Nested subcommand metadata and typed positional arguments.
-- Optional project-aware providers.
+`AGENTS.md` is the canonical repository-wide entry point. The generator also
+writes `CLAUDE.md`, `.agents/`, `.claude/skills/`,
+`.github/copilot-instructions.md`, and `.github/skills/`.
 
-See [`docs/architecture.md`](docs/architecture.md) and
-[`docs/roadmap.md`](docs/roadmap.md).
+Validate the generated configuration with:
+
+```sh
+python3 init-agents.py --check
+```
+
+`--init` is for initial generation in a fresh checkout; it refuses to overwrite
+edited guidance files.

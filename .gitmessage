@@ -1,0 +1,12 @@
+# <type>(<scope>): <outcome>
+#
+# Explain what changed and why. Keep one concern per commit.
+#
+# type:    feat | fix | refactor | docs | test | chore | perf | ci
+# scope:   package or area (daemon, engine, ui, cli, docs, infrastructure, ...);
+#          omit it for cross-cutting changes.
+# subject: present tense, lower case, no trailing period.
+#
+# Example: fix(daemon): a failed socket accept no longer stops the daemon
+#
+# A behavior change also adds a CHANGELOG.md entry.

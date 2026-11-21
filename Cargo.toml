@@ -10,7 +10,7 @@ license = "MIT"
 readme = "README.md"
 keywords = ["shell", "completion", "zsh", "suggestions", "popup"]
 categories = ["command-line-utilities"]
-include = ["/src", "/tests", "/docs", "/README.md", "/LICENSE"]
+include = ["/src", "/tests", "/docs", "/README.md", "/CHANGELOG.md", "/LICENSE"]
 
 [dependencies]
 anyhow = "1.0.103"

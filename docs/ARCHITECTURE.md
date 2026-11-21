@@ -37,7 +37,8 @@ Command descriptions, parsed root options, subcommands, and documented option
 values use a separate owner-private JSON cache. Entries are keyed by resolved
 executable path, device, inode, size, mode, modification time, and change time.
 This keeps cache loading and persistence independent of the history database and
-its completion lock.
+its completion lock. Cached misses expire after one day; descriptions expire
+after 30 days or immediately when the executable identity changes.
 
 The shell sends only command text, working directory, timestamp, session ID, and
 exit code. zsuggestion does not collect stdout, stderr, environment values, or command
@@ -158,10 +159,10 @@ Unresolved command metadata is also excluded from that path. A completion
 request performs only an in-memory cache lookup and nonblocking bounded enqueue.
 Two daemon workers inspect only visible commands, preferring the
 exact man page before a direct `--help` probe. Man and help processes have
-owner-private bounded output, process-group timeouts, and cleared pager/color
-state. On macOS, direct executable probing additionally runs through
-`sandbox-exec` with network and writes denied; platforms without an implemented
-sandbox use man pages only. Parsers retain a bounded set of strict ASCII option
+owner-private bounded output, process-group timeouts, an empty environment, and
+cleared pager/color state. On macOS, direct executable probing additionally runs
+through `sandbox-exec` with network and writes denied; platforms without an
+implemented sandbox use man pages only. Parsers retain a bounded set of strict ASCII option
 spellings and control-free descriptions from recognized option sections; usage
 examples and free prose never become candidates.
 
