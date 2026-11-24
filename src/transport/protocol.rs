@@ -34,6 +34,7 @@ pub enum Request {
         buffer: String,
         cursor_byte: usize,
         cwd: String,
+        /// Per-tier candidate budget. Defaults to `completion.max_candidates`.
         limit: Option<usize>,
         /// Shell aliases relevant to this buffer. The frontend sends only
         /// aliases whose names extend the command word, or the alias chain of
@@ -44,6 +45,7 @@ pub enum Request {
     Fuzzy {
         query: String,
         cwd: String,
+        /// Total candidate budget. Defaults to `completion.max_candidates`.
         limit: Option<usize>,
     },
     ImportHistory {

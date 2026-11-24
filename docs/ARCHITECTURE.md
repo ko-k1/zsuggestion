@@ -56,15 +56,29 @@ Providers are queried in strict order:
    word.
 2. Parsed and cached root-command options, subcommands, and values for the
    current command context.
-3. Exact-prefix command history.
-4. Bounded local filesystem matches at argument positions.
+3. Bounded local filesystem matches at argument positions. For simple command
+   lines, commands whose operands must be directories (`cd`, `pushd`, `mkdir`,
+   `rmdir`) receive directories only, and commands that take no paths (`popd`,
+   `dirs`) receive none. Compound commands, assignments, and wrappers fall
+   back to all candidates because their first word no longer describes the
+   command at the cursor.
+4. Exact-prefix command history, skipping entries whose untyped words name
+   paths that do not exist from the current directory, entries whose directory
+   operand is an existing non-directory, duplicate directory rows already
+   supplied by the filesystem tier for path-taking commands, and commands that
+   only ever failed as not found (exit 126/127). Entries containing unmodelled
+   shell syntax are kept conservatively.
 5. Append-safe candidates from the active Zsh completion system.
 6. No result.
 
-The rendered menu is re-sorted into presentation tiers before display:
-installed commands first, then per-command options, subcommands, and values,
-then directories and files, then remaining native candidates, with recorded
-history always last so personal history never buries fresh command content.
+The rendered menu keeps provider order within the regular suggestion tier:
+installed commands, then per-command options, subcommands, and values, then
+directories and files, followed by remaining native candidates. Recorded
+history is always last, so personal history never buries current command
+content. A history row that duplicates a regular suggestion of any kind,
+including a native one, is replaced by the regular row. Duplicates ignore
+trailing whitespace and, for commands whose operands are paths, a trailing
+`/`; other commands (such as `git checkout`) keep `src` and `src/` distinct.
 
 Shell aliases are shell-local, so the frontend sends them with each request
 rather than registering them with the shared daemon. While the command word is
@@ -134,8 +148,9 @@ src/
       segments.rs    segment acceptance for history candidates
       tiers/
         aliases.rs   alias validation, candidates, leading-alias expansion
-        filesystem.rs bounded path candidates merged behind higher tiers
-        history.rs   recorded-history candidates
+        filesystem.rs bounded path candidates
+        history.rs   recorded-history candidates and path plausibility
+        paths.rs     shared command/path classification
     fuzzy/           fzf-ranked history and command search
       mod.rs
   persistence/       SQLite history store and Zsh history import

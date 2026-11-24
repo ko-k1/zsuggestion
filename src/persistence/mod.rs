@@ -128,6 +128,9 @@ impl Store {
              FROM command_events
              WHERE command LIKE ?1 ESCAPE '\\' AND command <> ?3
               GROUP BY command
+             -- Drop commands that only ever failed as not found (127) or not
+             -- executable (126); imported events have NULL exit codes and stay.
+             HAVING SUM(CASE WHEN exit_code IN (126, 127) THEN 0 ELSE 1 END) > 0
               ORDER BY
                 latest DESC,
                 same_cwd DESC,
@@ -166,6 +169,11 @@ impl Store {
                 COUNT(*) AS uses
              FROM command_events
               GROUP BY command
+             -- Keep fuzzy history consistent with exact-prefix history:
+             -- never suggest a command that only ever failed as not found
+             -- (127) or not executable (126). Imported events have NULL exit
+             -- codes and stay.
+             HAVING SUM(CASE WHEN exit_code IN (126, 127) THEN 0 ELSE 1 END) > 0
               ORDER BY
                 latest DESC,
                 same_cwd DESC,
@@ -411,6 +419,35 @@ mod tests {
                 .collect::<Vec<_>>(),
             vec!["git status", "git stash", "git switch main"]
         );
+    }
+
+    #[test]
+    fn skips_commands_that_were_never_found() {
+        let store = Store::in_memory().unwrap();
+        store
+            .record("tpyo --x", "/repo", 127, 10, "one", true)
+            .unwrap();
+        store
+            .record("tpyo --y", "/repo", 127, 11, "one", true)
+            .unwrap();
+        store
+            .record("tpyo --y", "/repo", 0, 12, "one", true)
+            .unwrap();
+        let commands: Vec<_> = store
+            .history_candidates("tpyo", "/repo", 10, true)
+            .unwrap()
+            .into_iter()
+            .map(|candidate| candidate.command)
+            .collect();
+        assert_eq!(commands, ["tpyo --y"]);
+
+        let inventory: Vec<_> = store
+            .history_inventory("/repo", 10, true)
+            .unwrap()
+            .into_iter()
+            .map(|candidate| candidate.command)
+            .collect();
+        assert_eq!(inventory, ["tpyo --y"]);
     }
 
     #[test]

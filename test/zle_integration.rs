@@ -35,7 +35,13 @@ impl ZleSession {
     /// until the first popup appears after typing `zsu`.
     fn new() -> Self {
         if !command_exists("tmux") || !command_exists("zsh") {
-            eprintln!("skipping ZLE integration test because tmux or zsh is unavailable");
+            // libtest captures `eprintln!`, and `exit` would discard it, so
+            // write to the raw stderr handle to keep the skip visible.
+            use std::io::Write;
+            let _ = writeln!(
+                std::io::stderr().lock(),
+                "warning: skipping all ZLE integration tests because tmux or zsh is unavailable"
+            );
             std::process::exit(0);
         }
 
@@ -426,6 +432,12 @@ _zsuggestion_test_scp() {{
   fi
 }}
 compdef _zsuggestion_test_scp scp
+_zsuggestion_test_user_prefix() {{
+  IPREFIX=pre
+  PREFIX=fix
+  compadd -U -i "$IPREFIX" -- fixbody
+}}
+compdef _zsuggestion_test_user_prefix zsuggestion-user-prefix-fixture
 _zsuggestion_test_ssh() {{
   compadd alice@example.com
 }}
@@ -969,6 +981,41 @@ fn native_completion_tab_fill_and_ssh_scp() {
     assert_eq!(
         remote_fields[3], "scp zzuser@example.com:/srv/app/file ",
         "Tab did not fill the remote destination candidate"
+    );
+
+    session.send_keys("C-c");
+    session.wait_for_zle();
+}
+
+#[test]
+fn native_user_prefix_is_not_duplicated() {
+    let session = ZleSession::new();
+
+    session.send_keys_literal("zsuggestion-user-prefix-fixture prefix");
+    let deadline = Instant::now() + Duration::from_secs(10);
+    let mut capture = String::new();
+    while Instant::now() < deadline {
+        capture = session.capture_pane(false);
+        if capture.contains("zsuggestion-user-prefix-fixture prefixbody") {
+            break;
+        }
+        thread::sleep(Duration::from_millis(50));
+    }
+    assert!(
+        capture.contains("zsuggestion-user-prefix-fixture prefixbody"),
+        "native completion with -U lost its ignored prefix:\n{capture}"
+    );
+    assert!(
+        !capture.contains("preprefixbody"),
+        "native completion with -U duplicated IPREFIX:\n{capture}"
+    );
+
+    session.send_keys("Tab");
+    session.dump_state();
+    let fields = session.read_state_fields();
+    assert_eq!(
+        fields[3], "zsuggestion-user-prefix-fixture prefixbody ",
+        "accepting the -U candidate inserted the wrong text"
     );
 
     session.send_keys("C-c");
