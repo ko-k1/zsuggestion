@@ -175,7 +175,8 @@ fn structured_candidate(
     })
 }
 
-/// Tier 3: recorded history fills any remaining capacity, always last.
+/// Tier 4: recorded history, always last. History receives its own budget so
+/// a full higher tier does not hide it.
 pub fn history_tier(
     store: &Store,
     buffer: &str,

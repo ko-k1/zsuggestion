@@ -53,6 +53,7 @@ pub enum Command {
         cursor: usize,
         #[arg(long)]
         cwd: PathBuf,
+        /// Maximum candidates per daemon tier.
         #[arg(long)]
         limit: Option<usize>,
         /// A shell alias relevant to the buffer; may be repeated.
@@ -67,6 +68,7 @@ pub enum Command {
         query: String,
         #[arg(long)]
         cwd: PathBuf,
+        /// Maximum candidates.
         #[arg(long)]
         limit: Option<usize>,
         #[arg(long, value_enum, default_value_t = OutputFormat::Json)]

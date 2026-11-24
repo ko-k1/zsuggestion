@@ -1,14 +1,14 @@
 //! Bounded local filesystem candidates for argument positions and explicit
-//! paths in command position, plus merging them behind higher tiers.
+//! paths in command position.
 
-use std::collections::HashSet;
 use std::fs;
 use std::path::{Path, PathBuf};
 
 use anyhow::Result;
 
 use super::super::segments::next_segment;
-use crate::transport::protocol::{Candidate, CandidateKind, CandidateSource, CompletionResponse};
+use super::{aliases, paths};
+use crate::transport::protocol::{Alias, Candidate, CandidateKind, CandidateSource};
 
 const MAX_DIRECTORY_ENTRIES: usize = 1024;
 
@@ -16,6 +16,7 @@ pub fn filesystem_candidates(
     buffer: &str,
     cursor_byte: usize,
     cwd: &str,
+    aliases: &[Alias],
 ) -> Result<Vec<Candidate>> {
     if cursor_byte != buffer.len() || !buffer.is_char_boundary(cursor_byte) {
         return Ok(Vec::new());
@@ -25,6 +26,12 @@ pub fn filesystem_candidates(
     // command names never turn into filesystem guesses.
     let argument_start = current_argument_start(buffer);
     let command_position = argument_start.is_none();
+    let expanded = aliases::expand_leading_alias(buffer, aliases);
+    let command = paths::classification_command(expanded.as_deref().unwrap_or(buffer));
+    if command.is_some_and(paths::takes_no_paths) {
+        return Ok(Vec::new());
+    }
+    let directories_only = command.is_some_and(paths::takes_directories_only);
     let Some(token) = unescape_path_token(&buffer[argument_start.unwrap_or(0)..]) else {
         return Ok(Vec::new());
     };
@@ -41,7 +48,16 @@ pub fn filesystem_candidates(
     };
     let show_hidden = name_prefix.starts_with('.');
     let mut matches = Vec::new();
+    let mut scanned = 0usize;
     for child in children.flatten() {
+        // Directory-only commands reject most entries, so cap the entries
+        // examined rather than only the candidates kept.
+        if directories_only {
+            scanned += 1;
+            if scanned > MAX_DIRECTORY_ENTRIES {
+                break;
+            }
+        }
         let Some(name) = child.file_name().to_str().map(str::to_owned) else {
             continue;
         };
@@ -59,6 +75,9 @@ pub fn filesystem_candidates(
             continue;
         }
         let is_directory = file_type.is_dir() || (file_type.is_symlink() && child.path().is_dir());
+        if directories_only && !is_directory {
+            continue;
+        }
         let executable = command_position && !is_directory && is_executable(&child.path());
         let suffix = &name[name_prefix.len()..];
         let mut insert_text = escape_path_suffix(suffix);
@@ -115,50 +134,7 @@ pub fn filesystem_candidates(
         .collect())
 }
 
-pub fn merge_filesystem_candidates(
-    response: &mut CompletionResponse,
-    paths: Vec<Candidate>,
-    limit: usize,
-) {
-    if paths.is_empty() || limit == 0 {
-        return;
-    }
-    let history_count = response
-        .candidates
-        .iter()
-        .rev()
-        .take_while(|candidate| candidate.source == CandidateSource::History)
-        .count();
-    let mut original = std::mem::take(&mut response.candidates);
-    let history = original.split_off(original.len() - history_count);
-    let mut seen = HashSet::new();
-    for candidate in original {
-        if response.candidates.len() >= limit {
-            break;
-        }
-        if seen.insert(candidate.display.clone()) {
-            response.candidates.push(candidate);
-        }
-    }
-    for path in paths {
-        if response.candidates.len() >= limit {
-            break;
-        }
-        if seen.insert(path.display.clone()) {
-            response.candidates.push(path);
-        }
-    }
-    for candidate in history {
-        if response.candidates.len() >= limit {
-            break;
-        }
-        if seen.insert(candidate.display.clone()) {
-            response.candidates.push(candidate);
-        }
-    }
-}
-
-fn explicit_path_token(token: &str) -> bool {
+pub(crate) fn explicit_path_token(token: &str) -> bool {
     ["./", "../", "/", "~/"]
         .iter()
         .any(|prefix| token.starts_with(prefix))
@@ -176,7 +152,7 @@ fn is_executable(_path: &Path) -> bool {
     false
 }
 
-fn resolve_directory(directory_text: &str, cwd: &str) -> PathBuf {
+pub(crate) fn resolve_directory(directory_text: &str, cwd: &str) -> PathBuf {
     if directory_text == "~/" {
         return std::env::var_os("HOME")
             .map(PathBuf::from)
@@ -196,7 +172,7 @@ fn resolve_directory(directory_text: &str, cwd: &str) -> PathBuf {
     }
 }
 
-fn unescape_path_token(value: &str) -> Option<String> {
+pub(crate) fn unescape_path_token(value: &str) -> Option<String> {
     let mut unescaped = String::new();
     let mut escaped = false;
     for character in value.chars() {
@@ -214,7 +190,7 @@ fn unescape_path_token(value: &str) -> Option<String> {
     (!escaped).then_some(unescaped)
 }
 
-fn current_argument_start(buffer: &str) -> Option<usize> {
+pub(crate) fn current_argument_start(buffer: &str) -> Option<usize> {
     let mut start = None;
     let mut escaped = false;
     for (index, character) in buffer.char_indices() {
@@ -260,9 +236,13 @@ mod tests {
         fs::write(directory.path().join("space dir/child"), "file").unwrap();
 
         let buffer = "scp -r alpha";
-        let candidates =
-            filesystem_candidates(buffer, buffer.len(), directory.path().to_str().unwrap())
-                .unwrap();
+        let candidates = filesystem_candidates(
+            buffer,
+            buffer.len(),
+            directory.path().to_str().unwrap(),
+            &[],
+        )
+        .unwrap();
         assert_eq!(candidates[0].display, "scp -r alpha-dir/");
         assert_eq!(candidates[0].kind, CandidateKind::Directory);
         assert!(candidates.iter().any(|candidate| {
@@ -280,21 +260,27 @@ mod tests {
         );
 
         let nested = "scp -r space\\ dir/ch";
-        let candidates =
-            filesystem_candidates(nested, nested.len(), directory.path().to_str().unwrap())
-                .unwrap();
+        let candidates = filesystem_candidates(
+            nested,
+            nested.len(),
+            directory.path().to_str().unwrap(),
+            &[],
+        )
+        .unwrap();
         assert_eq!(candidates[0].display, "scp -r space\\ dir/child");
 
         let exact = "scp -r alpha-file";
         let candidates =
-            filesystem_candidates(exact, exact.len(), directory.path().to_str().unwrap()).unwrap();
+            filesystem_candidates(exact, exact.len(), directory.path().to_str().unwrap(), &[])
+                .unwrap();
         assert_eq!(candidates.len(), 1);
         assert_eq!(candidates[0].display, exact);
         assert_eq!(candidates[0].accept_text, " ");
 
         let blank = "scp -r ";
         let candidates =
-            filesystem_candidates(blank, blank.len(), directory.path().to_str().unwrap()).unwrap();
+            filesystem_candidates(blank, blank.len(), directory.path().to_str().unwrap(), &[])
+                .unwrap();
         assert!(
             candidates
                 .iter()
@@ -313,19 +299,106 @@ mod tests {
         fs::write(directory.path().join("visible"), "file").unwrap();
 
         let buffer = "command ";
-        let candidates =
-            filesystem_candidates(buffer, buffer.len(), directory.path().to_str().unwrap())
-                .unwrap();
+        let candidates = filesystem_candidates(
+            buffer,
+            buffer.len(),
+            directory.path().to_str().unwrap(),
+            &[],
+        )
+        .unwrap();
         assert!(
             candidates
                 .iter()
                 .any(|candidate| candidate.display == "command visible")
         );
         assert!(
-            filesystem_candidates("com", 3, directory.path().to_str().unwrap())
+            filesystem_candidates("com", 3, directory.path().to_str().unwrap(), &[])
                 .unwrap()
                 .is_empty()
         );
+    }
+
+    #[test]
+    fn only_offers_directories_to_directory_commands() {
+        let directory = tempdir().unwrap();
+        let cwd = directory.path().to_str().unwrap();
+        fs::create_dir(directory.path().join("subdir")).unwrap();
+        fs::create_dir(directory.path().join("subdir/nested")).unwrap();
+        fs::write(directory.path().join("subdir/file"), "file").unwrap();
+        fs::write(directory.path().join("subfile"), "file").unwrap();
+        fs::write(directory.path().join("notes.md"), "file").unwrap();
+
+        for buffer in [
+            "cd ",
+            "cd s",
+            "cd subdir/",
+            "cd subdir/n",
+            "mkdir ",
+            "rmdir ",
+            "pushd ",
+            "chdir ",
+        ] {
+            let candidates = filesystem_candidates(buffer, buffer.len(), cwd, &[]).unwrap();
+            assert!(
+                candidates
+                    .iter()
+                    .all(|candidate| candidate.kind == CandidateKind::Directory),
+                "{buffer}: {candidates:?}"
+            );
+        }
+
+        let candidates = filesystem_candidates("cd ", 3, cwd, &[]).unwrap();
+        let displays: Vec<_> = candidates
+            .iter()
+            .map(|candidate| candidate.display.as_str())
+            .collect();
+        assert_eq!(displays, ["cd subdir/"]);
+
+        let candidates = filesystem_candidates("cd subdir/", 10, cwd, &[]).unwrap();
+        let displays: Vec<_> = candidates
+            .iter()
+            .map(|candidate| candidate.display.as_str())
+            .collect();
+        assert_eq!(displays, ["cd subdir/nested/"]);
+
+        assert!(
+            filesystem_candidates("cd notes", 8, cwd, &[])
+                .unwrap()
+                .is_empty()
+        );
+        assert!(
+            filesystem_candidates("cd subdir/f", 11, cwd, &[])
+                .unwrap()
+                .is_empty()
+        );
+
+        for buffer in ["popd ", "dirs ", "popd +"] {
+            assert!(
+                filesystem_candidates(buffer, buffer.len(), cwd, &[])
+                    .unwrap()
+                    .is_empty(),
+                "{buffer}"
+            );
+        }
+    }
+
+    #[test]
+    fn expands_aliases_before_classifying_directory_commands() {
+        let directory = tempdir().unwrap();
+        let cwd = directory.path().to_str().unwrap();
+        fs::create_dir(directory.path().join("subdir")).unwrap();
+        fs::write(directory.path().join("subfile"), "file").unwrap();
+
+        let alias = Alias {
+            name: "c".to_owned(),
+            value: "cd".to_owned(),
+        };
+        let candidates = filesystem_candidates("c ", 2, cwd, &[alias]).unwrap();
+        let displays: Vec<_> = candidates
+            .iter()
+            .map(|candidate| candidate.display.as_str())
+            .collect();
+        assert_eq!(displays, ["c subdir/"]);
     }
 
     #[test]
@@ -346,7 +419,7 @@ mod tests {
         }
         fs::write(directory.path().join("build/app"), "file").unwrap();
 
-        let candidates = filesystem_candidates("./", 2, cwd).unwrap();
+        let candidates = filesystem_candidates("./", 2, cwd, &[]).unwrap();
         let displays: Vec<_> = candidates.iter().map(|c| c.display.as_str()).collect();
         assert_eq!(displays, ["./build/", "./run.sh", "./notes.txt"]);
         assert_eq!(candidates[0].kind, CandidateKind::Directory);
@@ -354,21 +427,21 @@ mod tests {
         assert_eq!(candidates[1].description, "Executable");
         assert_eq!(candidates[2].description, "File");
 
-        let candidates = filesystem_candidates("./r", 3, cwd).unwrap();
+        let candidates = filesystem_candidates("./r", 3, cwd, &[]).unwrap();
         assert_eq!(candidates.len(), 1);
         assert_eq!(candidates[0].display, "./run.sh");
 
-        let candidates = filesystem_candidates("./build/", 8, cwd).unwrap();
+        let candidates = filesystem_candidates("./build/", 8, cwd, &[]).unwrap();
         assert_eq!(candidates[0].display, "./build/app");
 
         let nested = directory.path().join("build");
-        let candidates = filesystem_candidates("../", 3, nested.to_str().unwrap()).unwrap();
+        let candidates = filesystem_candidates("../", 3, nested.to_str().unwrap(), &[]).unwrap();
         assert!(candidates.iter().any(|c| c.display == "../run.sh"));
 
         // Bare words and `.`/`..` alone stay command or history territory.
         for buffer in ["run", ".", "..", "build/"] {
             assert!(
-                filesystem_candidates(buffer, buffer.len(), cwd)
+                filesystem_candidates(buffer, buffer.len(), cwd, &[])
                     .unwrap()
                     .is_empty(),
                 "{buffer}"
@@ -377,70 +450,20 @@ mod tests {
     }
 
     #[test]
-    fn filesystem_reserves_capacity_behind_command_suggestions() {
-        let mut response = CompletionResponse {
-            replace_start_byte: 5,
-            replace_end_byte: 5,
-            candidates: (0..4)
-                .map(|index| Candidate {
-                    display: format!("cmd entry-{index}"),
-                    description: String::new(),
-                    description_pending: false,
-                    kind: CandidateKind::Command,
-                    insert_text: index.to_string(),
-                    accept_text: index.to_string(),
-                    source: CandidateSource::Command,
-                })
-                .collect(),
-            enrichment_pending: false,
-        };
-        let paths = (0..2)
-            .map(|index| Candidate {
-                display: format!("cmd path-{index}"),
-                description: "File".to_owned(),
-                description_pending: false,
-                kind: CandidateKind::File,
-                insert_text: index.to_string(),
-                accept_text: index.to_string(),
-                source: CandidateSource::Filesystem,
-            })
-            .collect();
-        merge_filesystem_candidates(&mut response, paths, 6);
-        assert_eq!(response.candidates.len(), 6);
-        assert!(
-            response
-                .candidates
-                .iter()
-                .take(4)
-                .all(|candidate| candidate.source == CandidateSource::Command)
-        );
-        assert!(
-            response
-                .candidates
-                .iter()
-                .skip(4)
-                .all(|candidate| candidate.source == CandidateSource::Filesystem)
-        );
+    fn compound_commands_do_not_restrict_candidate_kinds() {
+        let directory = tempdir().unwrap();
+        let cwd = directory.path().to_str().unwrap();
+        fs::create_dir(directory.path().join("subdir")).unwrap();
+        fs::write(directory.path().join("notes.md"), "file").unwrap();
 
-        let mut response = CompletionResponse::empty(0);
-        let paths = (0..2)
-            .map(|index| Candidate {
-                display: format!("cmd path-{index}"),
-                description: "File".to_owned(),
-                description_pending: false,
-                kind: CandidateKind::File,
-                insert_text: index.to_string(),
-                accept_text: index.to_string(),
-                source: CandidateSource::Filesystem,
-            })
-            .collect();
-        merge_filesystem_candidates(&mut response, paths, 1);
-        assert_eq!(response.candidates.len(), 1);
-        assert!(
-            response
-                .candidates
-                .iter()
-                .all(|c| c.source == CandidateSource::Filesystem)
-        );
+        for buffer in ["cd .. && ls ", "ls .. && cd ", "FOO=1 cd "] {
+            let candidates = filesystem_candidates(buffer, buffer.len(), cwd, &[]).unwrap();
+            assert!(
+                candidates
+                    .iter()
+                    .any(|candidate| candidate.kind == CandidateKind::File),
+                "{buffer}: {candidates:?}"
+            );
+        }
     }
 }

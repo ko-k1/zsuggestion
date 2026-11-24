@@ -43,8 +43,8 @@ responsive.
 
 - Command first: installed commands rank before anything else, then flags and
   subcommands, then values, then filesystem matches, with history last.
-- Candidate providers are ordered tiers; lower tiers fill unused menu space but
-  never outrank higher-confidence results.
+- Candidate providers are ordered tiers; lower tiers always appear after, and
+  never outrank, higher-confidence results, but are not crowded out by them.
 - The menu appears while typing and highlights the highest-ranked candidate.
 - Tab fills the whole selected candidate; the configured key (default
   Ctrl-Space) accepts it too.

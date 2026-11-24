@@ -19,4 +19,22 @@ headings that have no entries for a release.
   roadmap, architecture decision records, changelog, project policies, and
   generated agent guidance for the supported harnesses.
 
+### Fixed
+
+- The menu no longer stops at `max_candidates` rows of the first matching kind:
+  directories, files, and history still appear after a full list of commands,
+  subcommands, or options.
+- Native Zsh completions for nested paths (`ls src/…`) and option values
+  (`--color=…`) are now shown, and native directories end in `/`.
+- History no longer suggests paths that do not exist from the current
+  directory (for example `cat notes.md` recorded elsewhere, or `./deploy.sh`),
+  or commands that only ever failed with "command not found". Option values,
+  chmod/chown operands, interpreter script arguments, and wrapped commands are
+  not mistaken for paths. Entries containing shell syntax the tokenizer does
+  not model, such as a trailing comment, are kept conservatively.
+- For simple command lines, directory-only commands (`cd`, `pushd`, `mkdir`,
+  `rmdir`) now suggest directories only, and `popd`/`dirs` no longer receive
+  filesystem paths. A recorded `cd src` no longer repeats the filesystem's
+  `cd src/` row.
+
 [Unreleased]: https://github.com/ko-k1/zsuggestion/commits/main

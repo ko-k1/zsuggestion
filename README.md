@@ -44,7 +44,9 @@ As you type, a menu appears and highlights the best suggestion:
 
 Suggestions are ranked so installed commands come first, then flags and
 subcommands, then files and directories, with your own command history last.
-You never need completion scripts for each tool.
+For simple command lines, commands that only accept directories, such as `cd`,
+only show directory candidates. You never need completion scripts for each
+tool.
 
 ## Commands
 
@@ -66,7 +68,7 @@ Client commands start the daemon automatically if it is not running.
 
 ```toml
 [completion]
-max_candidates = 8   # rows shown in the menu
+max_candidates = 8   # candidate budget for each daemon tier
 key = "ctrl-space"   # key that accepts a suggestion
 accept = "full"      # fill the whole candidate on accept
 compinit = true      # load Zsh's completion system if you haven't

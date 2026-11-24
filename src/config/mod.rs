@@ -177,7 +177,8 @@ pub fn completion_key_sequence(key: &str) -> Result<String> {
 }
 
 pub const DEFAULT_CONFIG: &str = r#"[completion]
-# zsuggestion abstains instead of filling this list with low-confidence candidates.
+# Commands, structured completions, filesystem matches, and history each get
+# this many candidate slots.
 max_candidates = 8
 
 # Accept the highlighted completion with Ctrl-Space. Also accepts "ctrl-a"

@@ -1,6 +1,6 @@
 # Project Status
 
-Last reviewed: 2026-11-21
+Last reviewed: 2026-11-24
 
 ## Current state
 
@@ -33,7 +33,7 @@ The current slice includes:
 ## Verified
 
 - `cargo fmt --all -- --check`, `cargo clippy`, and `cargo test` pass
-  (81 library tests and 11 ZLE integration tests; the integration binary exits
+  (97 library tests and 12 ZLE integration tests; the integration binary exits
   early when tmux or zsh is unavailable).
 - `zsh -n` passes on the shell integration.
 - `cargo package` passes and includes the documentation set.

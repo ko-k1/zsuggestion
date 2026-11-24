@@ -927,7 +927,9 @@ if [[ -o interactive ]] && (( $+commands[zsuggestion] )); then
   _zsuggestion_menu_publish() {
     local index display
     local -a redraw_hooks apply_hooks
-    local limit=$(( __ZSUGGESTION_COMPLETION_MAX_CANDIDATES__ * 2 + __ZSUGGESTION_NATIVE_LIMIT__ ))
+    # Commands, structured, filesystem, and history each get their own
+    # candidate budget; native results get a separate budget.
+    local limit=$(( __ZSUGGESTION_COMPLETION_MAX_CANDIDATES__ * 4 + __ZSUGGESTION_NATIVE_LIMIT__ ))
     _ZSUGGESTION_MENU_ACCEPTS=()
     _ZSUGGESTION_MENU_DISPLAYS=()
     _ZSUGGESTION_MENU_DESCRIPTIONS=()
@@ -1130,6 +1132,8 @@ if [[ -o interactive ]] && (( $+commands[zsuggestion] )); then
         local __zsuggestion_added_prefix="" __zsuggestion_hidden_prefix="" __zsuggestion_ignored_prefix=""
         local __zsuggestion_added_suffix="" __zsuggestion_hidden_suffix="" __zsuggestion_ignored_suffix=""
         local __zsuggestion_display_array="" __zsuggestion_passthrough=0 __zsuggestion_flags __zsuggestion_flag __zsuggestion_value
+        local __zsuggestion_file_flag=0 __zsuggestion_file_prefix=""
+        local __zsuggestion_user_completion=0
         local __zsuggestion_index=1 __zsuggestion_flag_index
         # Calls that only ask compadd for matches (-A, -O, -D) add nothing.
         for __zsuggestion_argument in "$@"; do
@@ -1147,6 +1151,8 @@ if [[ -o interactive ]] && (( $+commands[zsuggestion] )); then
               for (( __zsuggestion_flag_index = 1; __zsuggestion_flag_index <= ${#__zsuggestion_flags}; __zsuggestion_flag_index++ )); do
                 __zsuggestion_flag="${__zsuggestion_flags[__zsuggestion_flag_index]}"
                 [[ "$__zsuggestion_flag" == [OAD] ]] && __zsuggestion_passthrough=1
+                [[ "$__zsuggestion_flag" == U ]] && __zsuggestion_user_completion=1
+                [[ "$__zsuggestion_flag" == f ]] && __zsuggestion_file_flag=1
                 if [[ "$__zsuggestion_flag" == o ]]; then
                   # -o takes an optional order list, attached or separate.
                   [[ -z "${__zsuggestion_flags[__zsuggestion_flag_index+1,-1]}" &&
@@ -1168,6 +1174,7 @@ if [[ -o interactive ]] && (( $+commands[zsuggestion] )); then
                   s) __zsuggestion_hidden_suffix="$__zsuggestion_value" ;;
                   I) __zsuggestion_ignored_suffix="$__zsuggestion_value" ;;
                   d) __zsuggestion_display_array="$__zsuggestion_value" ;;
+                  W) __zsuggestion_file_prefix="$__zsuggestion_value" ;;
                 esac
                 break
               done
@@ -1187,21 +1194,34 @@ if [[ -o interactive ]] && (( $+commands[zsuggestion] )); then
         [[ -n "$__zsuggestion_display_array" ]] && __zsuggestion_hit_displays=( "${(@P)__zsuggestion_display_array}" )
         builtin compadd -A __zsuggestion_hits -D __zsuggestion_hit_displays "$@" 2>/dev/null
 
-        if [[ -z "$IPREFIX$ISUFFIX$QIPREFIX$QISUFFIX$SUFFIX$__zsuggestion_added_prefix$__zsuggestion_hidden_prefix$__zsuggestion_ignored_prefix" ]]; then
-          local __zsuggestion_base_length=$(( ${#__zsuggestion_original_lbuffer} - ${#__zsuggestion_current_prefix} ))
+        # The completed word is IPREFIX, -i, -P, -p, the match, then -s, -S,
+        # -I. Prefixes are kept (path_files completes "src/m" with -p src/ and
+        # option values arrive after IPREFIX "--color="); only a cursor inside
+        # the word or open quoting is skipped. With -U, compadd ignores
+        # IPREFIX and uses only -i, so it must not be added twice.
+        if [[ -z "$ISUFFIX$QIPREFIX$QISUFFIX$SUFFIX" ]]; then
+          local __zsuggestion_word_prefix="$IPREFIX$__zsuggestion_current_prefix"
+          local __zsuggestion_insert_prefix="$__zsuggestion_ignored_prefix$__zsuggestion_added_prefix$__zsuggestion_hidden_prefix"
+          (( __zsuggestion_user_completion )) || __zsuggestion_insert_prefix="$IPREFIX$__zsuggestion_insert_prefix"
+          local __zsuggestion_base_length=$(( ${#__zsuggestion_original_lbuffer} - ${#__zsuggestion_word_prefix} ))
           local __zsuggestion_base="" __zsuggestion_match __zsuggestion_full __zsuggestion_accept __zsuggestion_description __zsuggestion_kind __zsuggestion_tag="${curtag:-}"
           local __zsuggestion_hit_index
           (( __zsuggestion_base_length > 0 )) && __zsuggestion_base="${__zsuggestion_original_lbuffer[1,$__zsuggestion_base_length]}"
           if (( __zsuggestion_base_length >= 0 )) &&
-             [[ -z "$__zsuggestion_current_prefix" ||
-                "${__zsuggestion_original_lbuffer[$(( __zsuggestion_base_length + 1 )),-1]}" == "$__zsuggestion_current_prefix" ]]; then
+             [[ -z "$__zsuggestion_word_prefix" ||
+                "${__zsuggestion_original_lbuffer[$(( __zsuggestion_base_length + 1 )),-1]}" == "$__zsuggestion_word_prefix" ]]; then
             for (( __zsuggestion_hit_index = 1; __zsuggestion_hit_index <= ${#__zsuggestion_hits}; __zsuggestion_hit_index++ )); do
               (( ${#__zsuggestion_accepts} < __ZSUGGESTION_NATIVE_LIMIT__ )) || break
               __zsuggestion_match="${__zsuggestion_hits[$__zsuggestion_hit_index]}"
               [[ -n "$__zsuggestion_match" && "${(q)__zsuggestion_match}" == "$__zsuggestion_match" ]] || continue
-              [[ -z "$__zsuggestion_current_prefix" ||
-                 "${__zsuggestion_match[1,${#__zsuggestion_current_prefix}]}" == "$__zsuggestion_current_prefix" ]] || continue
-              __zsuggestion_full="${__zsuggestion_base}${__zsuggestion_match}${__zsuggestion_hidden_suffix}${__zsuggestion_added_suffix}${__zsuggestion_ignored_suffix}"
+              __zsuggestion_full="${__zsuggestion_base}${__zsuggestion_insert_prefix}${__zsuggestion_match}${__zsuggestion_hidden_suffix}${__zsuggestion_added_suffix}${__zsuggestion_ignored_suffix}"
+              # compadd -f appends "/" to directories itself; mirror it so the
+              # row is a directory and accepting it descends into it.
+              if (( __zsuggestion_file_flag )) && [[ -z "$__zsuggestion_added_suffix$__zsuggestion_hidden_suffix" &&
+                    "$__zsuggestion_file_prefix" != \(* &&
+                    -d "${__zsuggestion_file_prefix:-$__zsuggestion_hidden_prefix}$__zsuggestion_match" ]]; then
+                __zsuggestion_full+="/"
+              fi
               [[ "$__zsuggestion_full" == "$__zsuggestion_original_lbuffer"* && "$__zsuggestion_full" != "$__zsuggestion_original_lbuffer" ]] || continue
               (( ${__zsuggestion_displays[(Ie)$__zsuggestion_full]} )) && continue
               __zsuggestion_accept="${__zsuggestion_full[${#__zsuggestion_original_lbuffer}+1,-1]}"
