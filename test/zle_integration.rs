@@ -1317,6 +1317,102 @@ fn fuzzy_mode_ghost_and_escape() {
 }
 
 #[test]
+fn history_search_ctrl_r() {
+    let session = ZleSession::new();
+    let executed = session.temporary.path().join("ctrl-r-executed");
+    let execute_command = format!(
+        "print -r -- ctrl-r-enter > {}",
+        shell_quote(executed.to_str().unwrap())
+    );
+    for command in [
+        "echo ctrl-r-alpha",
+        "echo ctrl-r-beta",
+        execute_command.as_str(),
+    ] {
+        session.record_command(command, session.temporary.path(), 0, "ctrl-r-test");
+    }
+    let wait_for_capture = |expected: &str| {
+        let deadline = Instant::now() + Duration::from_secs(10);
+        let mut capture = String::new();
+        while Instant::now() < deadline {
+            capture = session.capture_pane(false);
+            if capture.contains(expected) {
+                return capture;
+            }
+            thread::sleep(Duration::from_millis(50));
+        }
+        panic!("{expected:?} never appeared:\n{capture}");
+    };
+
+    // The typed line seeds a history-only query that replaces the whole line.
+    session.send_keys("C-c");
+    session.wait_for_zle();
+    session.send_keys_literal("ctrl-r");
+    session.send_keys("C-r");
+    let capture = wait_for_capture("echo ctrl-r-beta");
+    assert!(
+        capture.contains("History"),
+        "history footer absent:\n{capture}"
+    );
+    assert!(capture.contains("echo ctrl-r-alpha"), "{capture}");
+    session.dump_state();
+    let fields = session.read_state_fields();
+    assert_eq!(fields[3], "ctrl-r");
+    assert_eq!(fields[7], "1", "Ctrl-R did not enter search: {fields:?}");
+    assert_eq!(fields[8], "");
+    assert_eq!(fields[9], "ctrl-r");
+    assert!(fields[1].parse::<usize>().unwrap() >= 2, "{fields:?}");
+    assert!(
+        fields[16].split(';').all(|source| source == "history"),
+        "Ctrl-R offered non-history rows: {fields:?}"
+    );
+    assert_eq!(fields[15], format!("  → {}", fields[6]));
+
+    // Ctrl-R again moves down the list.
+    session.send_keys("C-r");
+    session.dump_state();
+    let moved = session.read_state_fields();
+    assert_eq!(moved[5], "2", "second Ctrl-R did not move down: {moved:?}");
+
+    // Escape restores the line as it was before Ctrl-R.
+    fs::write(&session.escape_request, "").unwrap();
+    session.dump_state();
+    let escaped = session.read_state_fields();
+    assert_eq!(escaped[3], "ctrl-r", "{escaped:?}");
+    assert_eq!(escaped[7], "0");
+
+    // On an empty line Ctrl-R lists recent history; Tab fills the selection.
+    session.send_keys("C-c");
+    session.wait_for_zle();
+    session.send_keys("C-r");
+    wait_for_capture("echo ctrl-r-beta");
+    session.dump_state();
+    let listed = session.read_state_fields();
+    assert_eq!(listed[3], "");
+    assert_eq!(listed[7], "1");
+    let selected = listed[6].clone();
+    session.send_keys("Tab");
+    session.dump_state();
+    let accepted = session.read_state_fields();
+    assert_eq!(accepted[3], selected, "Tab did not fill: {accepted:?}");
+    assert_eq!(accepted[7], "0");
+
+    // Enter runs the selected history entry.
+    session.send_keys("C-c");
+    session.wait_for_zle();
+    session.send_keys_literal("ctrl-r-enter");
+    session.send_keys("C-r");
+    session.wait_for_pane_contains("Enter run");
+    session.send_keys("Enter");
+    let deadline = Instant::now() + Duration::from_secs(10);
+    while Instant::now() < deadline && !executed.exists() {
+        thread::sleep(Duration::from_millis(50));
+    }
+    assert_eq!(fs::read_to_string(&executed).unwrap(), "ctrl-r-enter\n");
+    session.wait_for_zle();
+}
+
+#[test]
 fn command_and_file_previews() {
     let session = ZleSession::new();
 

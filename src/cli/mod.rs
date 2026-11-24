@@ -12,7 +12,7 @@ use clap::{Parser, Subcommand, ValueEnum};
 use crate::config::{Paths, Settings};
 use crate::output::{self, OutputFormat};
 use crate::shell;
-use crate::transport::protocol::{Alias, Request, Response};
+use crate::transport::protocol::{Alias, FuzzyScope, Request, Response};
 use crate::transport::{client, daemon};
 use crate::{clock, preview};
 
@@ -71,6 +71,9 @@ pub enum Command {
         /// Maximum candidates.
         #[arg(long)]
         limit: Option<usize>,
+        /// Search history and commands (`all`) or history only (`history`).
+        #[arg(long, value_enum, default_value_t = FuzzyScopeArg::All)]
+        scope: FuzzyScopeArg,
         #[arg(long, value_enum, default_value_t = OutputFormat::Json)]
         format: OutputFormat,
     },
@@ -108,6 +111,21 @@ pub enum Command {
 #[derive(Debug, Clone, Copy, ValueEnum)]
 pub enum Shell {
     Zsh,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
+pub enum FuzzyScopeArg {
+    All,
+    History,
+}
+
+impl From<FuzzyScopeArg> for FuzzyScope {
+    fn from(scope: FuzzyScopeArg) -> Self {
+        match scope {
+            FuzzyScopeArg::All => Self::All,
+            FuzzyScopeArg::History => Self::History,
+        }
+    }
 }
 
 pub fn run(cli: Cli) -> Result<()> {
@@ -159,12 +177,14 @@ pub fn run(cli: Cli) -> Result<()> {
             query,
             cwd,
             limit,
+            scope,
             format,
         } => {
             let request = Request::Fuzzy {
                 query,
                 cwd: path_string(cwd),
                 limit,
+                scope: scope.into(),
             };
             print_completion(client::request_idempotent(&paths, request)?, format)
         }
