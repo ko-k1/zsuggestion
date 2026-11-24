@@ -185,15 +185,10 @@ pub fn history_tier(
     settings: &Settings,
 ) -> Result<Vec<Candidate>> {
     let mut candidates = Vec::new();
+    // `history::candidates` already removes duplicate history rows.
     for mut entry in
         history::candidates(store, buffer, cwd, limit, settings.history.successful_first)?
     {
-        if candidates
-            .iter()
-            .any(|candidate: &Candidate| candidate.display == entry.display)
-        {
-            continue;
-        }
         entry.accept_text = match settings.completion.accept {
             AcceptMode::Segment => next_segment(&entry.insert_text),
             AcceptMode::Full => entry.insert_text.clone(),

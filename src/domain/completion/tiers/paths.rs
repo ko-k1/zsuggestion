@@ -93,6 +93,21 @@ pub(crate) fn paths_may_not_exist(command: &str) -> bool {
     PATHS_MAY_NOT_EXIST.contains(&command)
 }
 
+/// Commands whose operands name filesystem paths, so `src` and `src/` are
+/// the same operand when `src` is a directory. Script commands are excluded:
+/// operands after the script are its own arguments, not paths.
+pub(crate) fn path_operand_commands() -> impl Iterator<Item = &'static str> {
+    PATH_COMMANDS
+        .iter()
+        .chain(PATHS_MAY_NOT_EXIST)
+        .chain(DIRECTORY_ONLY_COMMANDS)
+        .copied()
+}
+
+pub(crate) fn takes_path_operands(command: &str) -> bool {
+    path_operand_commands().any(|candidate| candidate == command)
+}
+
 pub(crate) fn takes_directories_only(command: &str) -> bool {
     DIRECTORY_ONLY_COMMANDS.contains(&command)
 }

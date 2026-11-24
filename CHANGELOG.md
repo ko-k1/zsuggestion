@@ -23,7 +23,8 @@ headings that have no entries for a release.
 
 - The menu no longer stops at `max_candidates` rows of the first matching kind:
   directories, files, and history still appear after a full list of commands,
-  subcommands, or options.
+  subcommands, or options. History remains the bottom presentation tier and
+  never appears ahead of regular suggestions.
 - Native Zsh completions for nested paths (`ls src/…`) and option values
   (`--color=…`) are now shown, and native directories end in `/`.
 - History no longer suggests paths that do not exist from the current
@@ -32,6 +33,11 @@ headings that have no entries for a release.
   chmod/chown operands, interpreter script arguments, and wrapped commands are
   not mistaken for paths. Entries containing shell syntax the tokenizer does
   not model, such as a trailing comment, are kept conservatively.
+- History rows that duplicate a regular suggestion of any kind (command,
+  option, subcommand, value, file, or directory, from the daemon or native
+  Zsh completion) are replaced by the regular row, and remaining history stays
+  in the bottom tier instead of mixing with regular suggestions. For commands
+  whose operands are paths, `ls src` and `ls src/` count as the same row.
 - For simple command lines, directory-only commands (`cd`, `pushd`, `mkdir`,
   `rmdir`) now suggest directories only, and `popd`/`dirs` no longer receive
   filesystem paths. A recorded `cd src` no longer repeats the filesystem's

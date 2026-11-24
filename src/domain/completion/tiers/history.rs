@@ -47,9 +47,11 @@ pub(crate) fn candidates(
             accept_text: suffix.to_owned(),
             source: CandidateSource::History,
         };
+        // Path-operand slash equivalence is applied by `domain::complete`,
+        // which knows the command; here only trailing whitespace is ignored.
         if candidates
             .iter()
-            .any(|existing: &Candidate| existing.display == candidate.display)
+            .any(|existing: &Candidate| existing.display.trim_end() == candidate.display.trim_end())
         {
             continue;
         }

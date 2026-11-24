@@ -35,7 +35,13 @@ impl ZleSession {
     /// until the first popup appears after typing `zsu`.
     fn new() -> Self {
         if !command_exists("tmux") || !command_exists("zsh") {
-            eprintln!("skipping ZLE integration test because tmux or zsh is unavailable");
+            // libtest captures `eprintln!`, and `exit` would discard it, so
+            // write to the raw stderr handle to keep the skip visible.
+            use std::io::Write;
+            let _ = writeln!(
+                std::io::stderr().lock(),
+                "warning: skipping all ZLE integration tests because tmux or zsh is unavailable"
+            );
             std::process::exit(0);
         }
 

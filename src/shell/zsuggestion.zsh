@@ -521,6 +521,10 @@ if [[ -o interactive ]] && (( $+commands[zsuggestion] )); then
     (( _ZSUGGESTION_MENU_START > max_start )) && _ZSUGGESTION_MENU_START=$max_start
     local end=$(( _ZSUGGESTION_MENU_START + window_size - 1 ))
 
+    # History is the bottom presentation tier. It renders like any other row
+    # and is never pinned below the viewport; if commands, options, or
+    # directories fill every visible row, history stays out of view.
+
     # Like an IDE completion popup: rows show the word being completed, the
     # popup starts under that word, and its width fits the content.
     _zsuggestion_anchor "$input" "$cursor_position"
@@ -915,13 +919,119 @@ if [[ -o interactive ]] && (( $+commands[zsuggestion] )); then
 
   _zsuggestion_candidate_rank() {
     case "$1" in
-      command) REPLY=0 ;;
-      option | subcommand | value) REPLY=1 ;;
-      directory) REPLY=2 ;;
-      file) REPLY=3 ;;
+      command | option | subcommand | value | directory | file) REPLY=0 ;;
       history) REPLY=5 ;;
       *) REPLY=4 ;;
     esac
+  }
+
+  # Succeeds when $1 contains shell syntax outside quotes that the daemon's
+  # path classifier does not model; a port of `paths::has_unquoted_syntax`.
+  _zsuggestion_has_unquoted_syntax() {
+    emulate -L zsh
+    # Fast path: without any candidate syntax character there is nothing to
+    # scan, which keeps long plain lines from paying for the loop below.
+    [[ "$1" == *[\;\&\|\<\>\(\)\{\}\#[:cntrl:]]* ]] || return 1
+    local character quote=
+    local -i escaped=0
+    # Split once: indexing `${text[index]}` is O(n) per lookup in multibyte
+    # locales, which made the scan quadratic on long lines.
+    for character in "${(@s::)1}"; do
+      if (( escaped )); then
+        escaped=0
+      elif [[ "$character" == \\ ]]; then
+        escaped=1
+      elif [[ -n "$quote" ]]; then
+        [[ "$character" == "$quote" ]] && quote=
+      elif [[ "$character" == [\'\"] ]]; then
+        quote="$character"
+      elif [[ "$character" == [\;\&\|\<\>\(\)\{\}\#] ||
+              ( "$character" == [[:cntrl:]] && "$character" != $'\t' ) ]]; then
+        return 0
+      fi
+    done
+    return 1
+  }
+
+  # Succeeds when the command word of $1, after alias expansion, takes path
+  # operands. The list is rendered from the daemon's own classification so
+  # the frontend and daemon agree.
+  _zsuggestion_menu_path_operands() {
+    emulate -L zsh
+    setopt extended_glob
+    local -a path_operand_commands=(__ZSUGGESTION_PATH_OPERAND_COMMANDS__)
+    local line="$1" word rest
+    local -i depth=0
+    local -A seen
+    # Mirror `aliases::expand_leading_alias`: once an argument follows the
+    # command word, replace the leading alias chain with its values.
+    while (( depth++ < 8 )) && [[ "$line" == *[[:space:]]* ]]; do
+      word="${line%%[[:space:]]*}"
+      [[ -n "$word" && -z "${seen[$word]}" ]] && (( ${+aliases[$word]} )) || break
+      seen[$word]=1
+      rest="${line#"$word"}"
+      line="${aliases[$word]##[[:space:]]#}$rest"
+    done
+    # Mirror `paths::classification_command`: the expanded line is not
+    # classified when it contains unquoted shell syntax.
+    _zsuggestion_has_unquoted_syntax "$line" && return 1
+    word="${${line##[[:space:]]#}%%[[:space:]]*}"
+    (( ${path_operand_commands[(Ie)$word]} ))
+  }
+
+  # Sets REPLY to the key that identifies duplicate rows: the display without
+  # trailing whitespace and, when $2 is 1, without trailing slashes.
+  _zsuggestion_menu_dedup_key() {
+    emulate -L zsh
+    setopt extended_glob
+    REPLY="${1%%[[:space:]]##}"
+    (( $2 )) && REPLY="${REPLY%%/##}"
+  }
+
+  # Appends native candidates to the menu rows within the $1 row budget.
+  _zsuggestion_menu_merge_native() {
+    emulate -L zsh
+    # A regular native suggestion of any kind (option, subcommand, value,
+    # file, or directory) overrides a duplicate history row, so history stays
+    # the bottom tier. Duplicates are matched like the daemon matches them:
+    # ignoring trailing whitespace and, for commands whose operands are
+    # paths, a trailing `/` (`ls src` and `ls src/` are the same row).
+    local -A history_rows
+    local key display
+    integer index limit=$1
+    _zsuggestion_menu_path_operands "$_ZSUGGESTION_MENU_REQUEST_BUFFER"
+    local -i path_operands=$(( ! $? ))
+    for (( index = 1; index <= ${#_ZSUGGESTION_MENU_DISPLAYS}; index++ )); do
+      [[ "${_ZSUGGESTION_MENU_SOURCES[$index]}" == history ]] || continue
+      _zsuggestion_menu_dedup_key "${_ZSUGGESTION_MENU_DISPLAYS[$index]}" $path_operands
+      [[ -n "${history_rows[$REPLY]}" ]] || history_rows[$REPLY]=$index
+    done
+
+    integer existing
+    for (( index = 1; index <= ${#_ZSUGGESTION_NATIVE_ACCEPTS}; index++ )); do
+      display="${_ZSUGGESTION_NATIVE_DISPLAYS[$index]}"
+      [[ -n "$display" ]] || continue
+      _zsuggestion_menu_dedup_key "$display" $path_operands
+      key="$REPLY"
+      existing=${history_rows[$key]:-0}
+      if (( existing )) && [[ "${_ZSUGGESTION_MENU_SOURCES[$existing]}" == history ]]; then
+        _ZSUGGESTION_MENU_ACCEPTS[$existing]="${_ZSUGGESTION_NATIVE_ACCEPTS[$index]}"
+        _ZSUGGESTION_MENU_DISPLAYS[$existing]="$display"
+        _ZSUGGESTION_MENU_DESCRIPTIONS[$existing]="${_ZSUGGESTION_NATIVE_DESCRIPTIONS[$index]}"
+        _ZSUGGESTION_MENU_KINDS[$existing]="${_ZSUGGESTION_NATIVE_KINDS[$index]:-native}"
+        _ZSUGGESTION_MENU_SOURCES[$existing]="native"
+        continue
+      fi
+      (( ${_ZSUGGESTION_MENU_DISPLAYS[(Ie)$display]} )) && continue
+      # The budget limits appended rows only; replacing a history row above
+      # adds nothing, so it runs even when the daemon filled the menu.
+      (( ${#_ZSUGGESTION_MENU_ACCEPTS} >= limit )) && continue
+      _ZSUGGESTION_MENU_ACCEPTS+=("${_ZSUGGESTION_NATIVE_ACCEPTS[$index]}")
+      _ZSUGGESTION_MENU_DISPLAYS+=("$display")
+      _ZSUGGESTION_MENU_DESCRIPTIONS+=("${_ZSUGGESTION_NATIVE_DESCRIPTIONS[$index]}")
+      _ZSUGGESTION_MENU_KINDS+=("${_ZSUGGESTION_NATIVE_KINDS[$index]:-native}")
+      _ZSUGGESTION_MENU_SOURCES+=("native")
+    done
   }
 
   _zsuggestion_menu_publish() {
@@ -947,18 +1057,7 @@ if [[ -o interactive ]] && (( $+commands[zsuggestion] )); then
       (( ${#_ZSUGGESTION_MENU_ACCEPTS} >= limit )) && break
     done
 
-    if (( ${#_ZSUGGESTION_MENU_ACCEPTS} < limit )); then
-      for (( index = 1; index <= ${#_ZSUGGESTION_NATIVE_ACCEPTS}; index++ )); do
-        display="${_ZSUGGESTION_NATIVE_DISPLAYS[$index]}"
-        [[ -n "$display" ]] && (( ! ${_ZSUGGESTION_MENU_DISPLAYS[(Ie)$display]} )) || continue
-        _ZSUGGESTION_MENU_ACCEPTS+=("${_ZSUGGESTION_NATIVE_ACCEPTS[$index]}")
-        _ZSUGGESTION_MENU_DISPLAYS+=("$display")
-        _ZSUGGESTION_MENU_DESCRIPTIONS+=("${_ZSUGGESTION_NATIVE_DESCRIPTIONS[$index]}")
-        _ZSUGGESTION_MENU_KINDS+=("${_ZSUGGESTION_NATIVE_KINDS[$index]:-native}")
-        _ZSUGGESTION_MENU_SOURCES+=("native")
-        (( ${#_ZSUGGESTION_MENU_ACCEPTS} >= limit )) && break
-      done
-    fi
+    _zsuggestion_menu_merge_native $limit
 
     if (( ${#_ZSUGGESTION_MENU_ACCEPTS} > 1 )); then
       local -a ranks perm sorted_accepts sorted_displays sorted_descriptions sorted_kinds sorted_sources

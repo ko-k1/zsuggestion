@@ -14,12 +14,18 @@ use anyhow::{Result, bail};
 use crate::catalog::CommandCatalog;
 use crate::config::Settings;
 use crate::persistence::Store;
-use crate::transport::protocol::{Alias, CandidateKind, CandidateSource, CompletionResponse};
+use crate::transport::protocol::{Alias, CompletionResponse};
 
 pub use completion::{command_tier, history_tier, structured_tier};
 pub use fuzzy::fuzzy;
 
 use completion::tiers::{aliases, filesystem, paths};
+
+// Shared with the shell frontend so both sides agree on path duplicates.
+pub(crate) use completion::tiers::paths::path_operand_commands;
+// Exposed so shell tests can check the Zsh port against the daemon rule.
+#[cfg(test)]
+pub(crate) use completion::tiers::paths::has_unquoted_syntax;
 
 const MAX_BUFFER_BYTES: usize = 64 * 1024;
 
@@ -78,45 +84,44 @@ pub fn complete(
     let mut paths = filesystem::filesystem_candidates(buffer, cursor_byte, cwd, aliases)?;
     paths.truncate(limit);
 
-    // Tier 4: recorded history, always last.
+    // Tier 4: recorded history, always last. A history row that duplicates a
+    // regular suggestion is dropped so the regular row overrides it.
     let history = history_tier(store, buffer, cwd, limit, settings)?;
-
-    // Filesystem directories are displayed with a trailing slash while a
-    // recorded `cd src` keeps the form the user typed. For directory-only
-    // commands `dir/` and `dir` are interchangeable, so drop the history row
-    // when the filesystem tier already offers the same directory. Other path
-    // commands (such as `git checkout`) can name branches or files, so a
-    // trailing-slash directory row and a bare path row are kept distinct.
     let expanded = aliases::expand_leading_alias(buffer, aliases);
-    let directories_only = paths::classification_command(expanded.as_deref().unwrap_or(buffer))
-        .is_some_and(paths::takes_directories_only);
-    let directory_displays: std::collections::HashSet<String> = if directories_only {
-        paths
-            .iter()
-            .filter(|candidate| candidate.kind == CandidateKind::Directory)
-            .map(|candidate| candidate.display.trim_end_matches('/').to_owned())
-            .collect()
-    } else {
-        std::collections::HashSet::new()
-    };
+    let path_operands = paths::classification_command(expanded.as_deref().unwrap_or(buffer))
+        .is_some_and(paths::takes_path_operands);
 
+    // Regular rows keep provider order and drop only exact duplicates. A
+    // history row is dropped when it matches a regular row or an earlier
+    // history row of any kind (command, option, subcommand, value, file, or
+    // directory), ignoring trailing whitespace and, for commands whose
+    // operands are paths, a trailing slash (`ls docs` equals the directory
+    // row `ls docs/`). Other commands can name branches or refs, so `src` and
+    // `src/` stay distinct there.
+    let history_key = |display: &str| {
+        let key = display.trim_end();
+        if path_operands {
+            key.trim_end_matches('/').to_owned()
+        } else {
+            key.to_owned()
+        }
+    };
     let mut seen = std::collections::HashSet::new();
+    let mut history_keys = std::collections::HashSet::new();
     for candidate in commands_found
         .into_iter()
         .chain(structured.into_iter().take(limit))
         .chain(paths)
-        .chain(history)
     {
-        if !seen.insert(candidate.display.clone()) {
-            continue;
+        if seen.insert(candidate.display.clone()) {
+            history_keys.insert(history_key(&candidate.display));
+            response.candidates.push(candidate);
         }
-        if candidate.source == CandidateSource::History
-            && directories_only
-            && directory_displays.contains(candidate.display.trim_end_matches('/'))
-        {
-            continue;
+    }
+    for candidate in history {
+        if history_keys.insert(history_key(&candidate.display)) {
+            response.candidates.push(candidate);
         }
-        response.candidates.push(candidate);
     }
 
     Ok(response)
@@ -348,6 +353,7 @@ mod tests {
         let cwd = directory.path().to_str().unwrap();
         std::fs::create_dir(directory.path().join("src")).unwrap();
         std::fs::write(directory.path().join("src/main.rs"), "").unwrap();
+        store.record("cd src/", cwd, 0, 90, "test", true).unwrap();
         store.record("cd src", cwd, 0, 100, "test", true).unwrap();
 
         let completion = complete(
@@ -536,5 +542,220 @@ mod tests {
         assert_eq!(completion.candidates[0].source, CandidateSource::Command);
         assert_eq!(completion.candidates[1].display, "atlas");
         assert_eq!(completion.candidates[1].source, CandidateSource::Command);
+    }
+
+    #[test]
+    fn command_inventory_deduplicates_history_with_trailing_whitespace() {
+        let store = Store::in_memory().unwrap();
+        store.record("cd ", "/repo", 0, 100, "test", true).unwrap();
+        let commands = CommandCatalog::from_entries([CommandEntry {
+            name: "cd".to_owned(),
+            description: "Change the current working directory".to_owned(),
+        }]);
+
+        let completion = complete(
+            &store,
+            &commands,
+            "cd",
+            2,
+            "/repo",
+            None,
+            &[],
+            &Settings::default(),
+        )
+        .unwrap();
+
+        assert_eq!(completion.candidates.len(), 1);
+        assert_eq!(completion.candidates[0].display, "cd");
+        assert_eq!(completion.candidates[0].source, CandidateSource::Command);
+    }
+
+    #[test]
+    fn history_directories_stay_below_filesystem_directories() {
+        let store = Store::in_memory().unwrap();
+        let directory = tempfile::tempdir().unwrap();
+        let cwd = directory.path().to_str().unwrap();
+        for index in 0..12 {
+            std::fs::create_dir(directory.path().join(format!("dir-{index:02}"))).unwrap();
+        }
+        // `dir-11` exists but falls outside the bounded filesystem list.
+        store
+            .record("cd dir-11", cwd, 0, 100, "test", true)
+            .unwrap();
+        // `dir-00` duplicates a filesystem row and must yield to it.
+        store
+            .record("cd dir-00", cwd, 0, 100, "test", true)
+            .unwrap();
+
+        let completion = complete(
+            &store,
+            &CommandCatalog::default(),
+            "cd ",
+            "cd ".len(),
+            cwd,
+            None,
+            &[],
+            &Settings::default(),
+        )
+        .unwrap();
+
+        let sources: Vec<_> = completion.candidates.iter().map(|c| c.source).collect();
+        let first_history = sources
+            .iter()
+            .position(|source| *source == CandidateSource::History)
+            .expect("history row");
+        assert!(
+            sources[first_history..]
+                .iter()
+                .all(|source| *source == CandidateSource::History),
+            "history must be the bottom tier: {sources:?}"
+        );
+        let history: Vec<_> = completion.candidates[first_history..]
+            .iter()
+            .map(|c| c.display.as_str())
+            .collect();
+        assert_eq!(history, ["cd dir-11"]);
+        assert_eq!(completion.candidates[0].display, "cd dir-00/");
+        assert_eq!(completion.candidates[0].source, CandidateSource::Filesystem);
+    }
+
+    #[test]
+    fn history_keeps_trailing_slash_variants_for_non_directory_commands() {
+        let store = Store::in_memory().unwrap();
+        let directory = tempfile::tempdir().unwrap();
+        let cwd = directory.path().to_str().unwrap();
+        std::fs::create_dir(directory.path().join("feature")).unwrap();
+        // A branch named `feature` and the `feature/` directory are different
+        // operands for a command whose operands are not always paths.
+        store
+            .record("git checkout feature", cwd, 0, 90, "test", true)
+            .unwrap();
+        store
+            .record("git checkout feature/", cwd, 0, 100, "test", true)
+            .unwrap();
+
+        let completion = complete(
+            &store,
+            &CommandCatalog::default(),
+            "git checkout f",
+            "git checkout f".len(),
+            cwd,
+            None,
+            &[],
+            &Settings::default(),
+        )
+        .unwrap();
+        let displays: Vec<_> = completion
+            .candidates
+            .iter()
+            .map(|c| (c.display.as_str(), c.source))
+            .collect();
+        assert_eq!(
+            displays,
+            [
+                ("git checkout feature/", CandidateSource::Filesystem),
+                ("git checkout feature", CandidateSource::History),
+            ]
+        );
+    }
+
+    #[test]
+    fn regular_rows_override_duplicate_history_of_every_kind() {
+        let store = Store::in_memory().unwrap();
+        let directory = tempfile::tempdir().unwrap();
+        let cwd = directory.path().to_str().unwrap();
+        std::fs::create_dir(directory.path().join("src")).unwrap();
+        std::fs::write(directory.path().join("notes.txt"), "").unwrap();
+        for command in [
+            "tool --verbose",
+            "tool build ",
+            "tool --color=auto",
+            "ls src",
+            "cat notes.txt",
+        ] {
+            store.record(command, cwd, 0, 100, "test", true).unwrap();
+        }
+        let commands = CommandCatalog::from_structured(
+            "tool",
+            vec![OptionMatch {
+                spelling: "--verbose".to_owned(),
+                description: String::new(),
+            }],
+            vec![SubcommandMatch {
+                name: "build".to_owned(),
+                description: String::new(),
+            }],
+            vec![(
+                "--color".to_owned(),
+                vec![ValueMatch {
+                    value: "auto".to_owned(),
+                    description: String::new(),
+                }],
+            )],
+        );
+
+        for (buffer, regular, kind) in [
+            ("tool --ver", "tool --verbose", CandidateKind::Option),
+            ("tool bu", "tool build", CandidateKind::Subcommand),
+            ("tool --color=a", "tool --color=auto", CandidateKind::Value),
+            ("ls s", "ls src/", CandidateKind::Directory),
+            ("cat no", "cat notes.txt", CandidateKind::File),
+        ] {
+            let completion = complete(
+                &store,
+                &commands,
+                buffer,
+                buffer.len(),
+                cwd,
+                None,
+                &[],
+                &Settings::default(),
+            )
+            .unwrap();
+            let rows: Vec<_> = completion
+                .candidates
+                .iter()
+                .map(|c| (c.display.as_str(), c.kind))
+                .collect();
+            assert_eq!(rows, [(regular, kind)], "buffer {buffer:?}");
+        }
+    }
+
+    #[test]
+    fn script_arguments_keep_trailing_slash_variants() {
+        let store = Store::in_memory().unwrap();
+        let directory = tempfile::tempdir().unwrap();
+        let cwd = directory.path().to_str().unwrap();
+        std::fs::write(directory.path().join("tool.py"), "").unwrap();
+        std::fs::create_dir(directory.path().join("build")).unwrap();
+        // `build` is the script's own argument, not the `build/` directory.
+        store
+            .record("python tool.py build", cwd, 0, 100, "test", true)
+            .unwrap();
+
+        let buffer = "python tool.py b";
+        let completion = complete(
+            &store,
+            &CommandCatalog::default(),
+            buffer,
+            buffer.len(),
+            cwd,
+            None,
+            &[],
+            &Settings::default(),
+        )
+        .unwrap();
+        let rows: Vec<_> = completion
+            .candidates
+            .iter()
+            .map(|c| (c.display.as_str(), c.source))
+            .collect();
+        assert_eq!(
+            rows,
+            [
+                ("python tool.py build/", CandidateSource::Filesystem),
+                ("python tool.py build", CandidateSource::History),
+            ]
+        );
     }
 }

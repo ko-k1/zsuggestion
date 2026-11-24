@@ -42,11 +42,12 @@ As you type, a menu appears and highlights the best suggestion:
 | `Space Space` | Enter fuzzy search over history and commands |
 | `Enter` | Run your command as usual |
 
-Suggestions are ranked so installed commands come first, then flags and
-subcommands, then files and directories, with your own command history last.
-For simple command lines, commands that only accept directories, such as `cd`,
-only show directory candidates. You never need completion scripts for each
-tool.
+Commands, flags, subcommands, values, files, and directories share the regular
+suggestion tier, with commands listed first. Your command history is an
+alternative at the bottom, and a matching history row gives way to the regular
+suggestion. For simple command lines, commands that only accept directories,
+such as `cd`, only show directory candidates. You never need completion scripts
+for each tool.
 
 ## Commands
 

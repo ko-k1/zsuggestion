@@ -39,6 +39,13 @@ pub fn zsh_integration(settings: &Settings) -> Result<String> {
             "__ZSUGGESTION_NATIVE_LIMIT__",
             completion.max_candidates.max(64).to_string(),
         ),
+        (
+            "__ZSUGGESTION_PATH_OPERAND_COMMANDS__",
+            crate::domain::path_operand_commands()
+                .map(|command| format!("'{command}'"))
+                .collect::<Vec<_>>()
+                .join(" "),
+        ),
         ("__ZSUGGESTION_AUTO_COMPINIT__", flag(completion.compinit)),
         ("__ZSUGGESTION_UI_MEASURE_PROMPT__", flag(ui.measure_prompt)),
         (
@@ -82,6 +89,157 @@ fn completion_key_label(key: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn menu_dedup_helpers_match_daemon_rules() {
+        let Ok(zsh) = which_zsh() else { return };
+        let integration = zsh_integration(&Settings::default()).unwrap();
+        let start = integration
+            .find("  _zsuggestion_has_unquoted_syntax() {")
+            .unwrap();
+        let end = integration.find("  _zsuggestion_menu_publish() {").unwrap();
+        let script = format!(
+            r#"{helpers}
+alias g=git c=cd l='ls --color | less' ll='l -a'
+check() {{
+  _zsuggestion_menu_path_operands "$1"; local -i d=$(( ! $? ))
+  _zsuggestion_menu_dedup_key "$2" $d
+  print -r -- "$d|$REPLY"
+}}
+check 'cd s' 'cd src/ '
+check 'c s' 'c src/'
+check 'pushd s' 'pushd src//'
+check 'git checkout s' 'git checkout src/'
+check 'g s' 'g src/'
+check 'ls; cd s' 'ls; cd src/'
+check "cd 'a;b' s" "cd 'a;b' src/"
+check 'ls s' 'ls src/'
+check '. s' '. src/'
+check 'python t.py b' 'python t.py build/'
+check 'l s' 'l src/'
+check 'll s' 'll src/'
+"#,
+            helpers = &integration[start..end]
+        );
+        let output = std::process::Command::new(zsh)
+            .args(["-f", "-c", &script])
+            .output()
+            .unwrap();
+        assert!(output.status.success(), "{output:?}");
+        assert_eq!(
+            String::from_utf8(output.stdout).unwrap(),
+            "1|cd src\n1|c src\n1|pushd src\n0|git checkout src/\n0|g src/\n0|ls; cd src/\n\
+             1|cd 'a;b' src\n1|ls src\n0|. src/\n0|python t.py build/\n0|l src/\n0|ll src/\n"
+        );
+    }
+
+    #[test]
+    fn native_rows_replace_duplicate_history_rows_even_when_full() {
+        let Ok(zsh) = which_zsh() else { return };
+        let integration = zsh_integration(&Settings::default()).unwrap();
+        let start = integration
+            .find("  _zsuggestion_has_unquoted_syntax() {")
+            .unwrap();
+        let end = integration.find("  _zsuggestion_menu_publish() {").unwrap();
+        let script = format!(
+            r#"{helpers}
+merge() {{
+  _ZSUGGESTION_MENU_REQUEST_BUFFER="$1"
+  _ZSUGGESTION_MENU_ACCEPTS=(a b); _ZSUGGESTION_MENU_DESCRIPTIONS=('' '')
+  _ZSUGGESTION_MENU_DISPLAYS=("$2" "$3"); _ZSUGGESTION_MENU_KINDS=(directory history)
+  _ZSUGGESTION_MENU_SOURCES=(filesystem history)
+  _ZSUGGESTION_NATIVE_ACCEPTS=(n m); _ZSUGGESTION_NATIVE_DESCRIPTIONS=(Dir Dir)
+  _ZSUGGESTION_NATIVE_DISPLAYS=("$4" "$5"); _ZSUGGESTION_NATIVE_KINDS=(directory directory)
+  _zsuggestion_menu_merge_native $6
+  local i; for (( i = 1; i <= ${{#_ZSUGGESTION_MENU_DISPLAYS}}; i++ )); do
+    print -rn -- "${{_ZSUGGESTION_MENU_DISPLAYS[$i]}}=${{_ZSUGGESTION_MENU_SOURCES[$i]}},"
+  done; print
+}}
+merge 'cd ' 'cd a/' 'cd src' 'cd src/' 'cd b/' 2
+merge 'cd ' 'cd a/' 'cd src' 'cd src/' 'cd b/' 9
+merge 'git checkout ' 'git checkout a/' 'git checkout src' 'git checkout src/' 'git checkout a/' 9
+merge 'ls ' 'ls a/' 'ls src' 'ls src/' 'ls b' 9
+merge 'git c' 'git clone' 'git commit ' 'git commit' 'git config' 9
+merge 'git commit --a' 'git commit --all' 'git commit --amend' 'git commit --amend ' 'git commit --author' 9
+"#,
+            helpers = &integration[start..end]
+        );
+        let output = std::process::Command::new(zsh)
+            .args(["-f", "-c", &script])
+            .output()
+            .unwrap();
+        assert!(output.status.success(), "{output:?}");
+        assert_eq!(
+            String::from_utf8(output.stdout).unwrap(),
+            "cd a/=filesystem,cd src/=native,\n\
+             cd a/=filesystem,cd src/=native,cd b/=native,\n\
+             git checkout a/=filesystem,git checkout src=history,git checkout src/=native,\n\
+             ls a/=filesystem,ls src/=native,ls b=native,\n\
+             git clone=filesystem,git commit=native,git config=native,\n\
+             git commit --all=filesystem,git commit --amend =native,git commit --author=native,\n"
+        );
+    }
+
+    #[test]
+    fn zsh_syntax_check_matches_daemon() {
+        let Ok(zsh) = which_zsh() else { return };
+        let integration = zsh_integration(&Settings::default()).unwrap();
+        let start = integration
+            .find("  _zsuggestion_has_unquoted_syntax() {")
+            .unwrap();
+        let end = integration
+            .find("  # Succeeds when the command word of $1")
+            .unwrap();
+        let inputs = [
+            "cd src",
+            "cd 'a;b'",
+            "cd \"a|b\" c",
+            r"cd a\;b",
+            "ls; cd s",
+            "cd {a,b}",
+            "cd a # note",
+            "cd 'unterminated;",
+            "cd \"it's\" x",
+            "cd a\tb",
+            "cd $(pwd)",
+            "cd a > b",
+        ];
+        let mut script = integration[start..end].to_owned();
+        for input in inputs {
+            script.push_str(&format!(
+                "_zsuggestion_has_unquoted_syntax {} && print 1 || print 0\n",
+                shell_quote(input)
+            ));
+        }
+        let output = std::process::Command::new(zsh)
+            .args(["-f", "-c", &script])
+            .output()
+            .unwrap();
+        assert!(output.status.success(), "{output:?}");
+        let expected: String = inputs
+            .iter()
+            .map(|input| {
+                if crate::domain::has_unquoted_syntax(input) {
+                    "1\n"
+                } else {
+                    "0\n"
+                }
+            })
+            .collect();
+        assert_eq!(String::from_utf8(output.stdout).unwrap(), expected);
+    }
+
+    fn shell_quote(value: &str) -> String {
+        format!("'{}'", value.replace('\'', r"'\''"))
+    }
+
+    fn which_zsh() -> Result<&'static str, ()> {
+        std::process::Command::new("zsh")
+            .args(["-fc", "true"])
+            .status()
+            .map_err(|_| ())
+            .and_then(|status| if status.success() { Ok("zsh") } else { Err(()) })
+    }
 
     #[test]
     fn renders_every_placeholder() {

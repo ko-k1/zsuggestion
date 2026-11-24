@@ -71,10 +71,14 @@ Providers are queried in strict order:
 5. Append-safe candidates from the active Zsh completion system.
 6. No result.
 
-The rendered menu is re-sorted into presentation tiers before display:
-installed commands first, then per-command options, subcommands, and values,
-then directories and files, then remaining native candidates, with recorded
-history always last so personal history never buries fresh command content.
+The rendered menu keeps provider order within the regular suggestion tier:
+installed commands, then per-command options, subcommands, and values, then
+directories and files, followed by remaining native candidates. Recorded
+history is always last, so personal history never buries current command
+content. A history row that duplicates a regular suggestion of any kind,
+including a native one, is replaced by the regular row. Duplicates ignore
+trailing whitespace and, for commands whose operands are paths, a trailing
+`/`; other commands (such as `git checkout`) keep `src` and `src/` distinct.
 
 Shell aliases are shell-local, so the frontend sends them with each request
 rather than registering them with the shared daemon. While the command word is
