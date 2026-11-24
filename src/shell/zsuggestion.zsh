@@ -938,9 +938,17 @@ if [[ -o interactive ]] && (( $+commands[zsuggestion] )); then
     _ZSUGGESTION_NATIVE_KINDS=()
   }
 
+  # Menu order: commands, then options, subcommands, and values, then
+  # directories and files, then unclassified native rows, then history.
+  # Directories and files share a rank so they keep provider order. The sort
+  # is stable, so daemon rows precede native rows of the same rank; native
+  # subcommands, flags, and values (`git switch --`, branch names) still rank
+  # above daemon filesystem matches.
   _zsuggestion_candidate_rank() {
     case "$1" in
-      command | option | subcommand | value | directory | file) REPLY=0 ;;
+      command) REPLY=0 ;;
+      option | subcommand | value) REPLY=1 ;;
+      directory | file) REPLY=2 ;;
       history) REPLY=5 ;;
       *) REPLY=4 ;;
     esac
@@ -1007,6 +1015,49 @@ if [[ -o interactive ]] && (( $+commands[zsuggestion] )); then
     setopt extended_glob
     REPLY="${1%%[[:space:]]##}"
     (( $2 )) && REPLY="${REPLY%%/##}"
+  }
+
+  # Stable insertion sort of the menu rows by _zsuggestion_candidate_rank.
+  _zsuggestion_menu_sort() {
+    if (( ${#_ZSUGGESTION_MENU_ACCEPTS} > 1 )); then
+      local -a ranks perm sorted_accepts sorted_displays sorted_descriptions sorted_kinds sorted_sources
+      integer rank_index inner_index moving moving_rank other other_rank
+      ranks=()
+      for (( rank_index = 1; rank_index <= ${#_ZSUGGESTION_MENU_KINDS}; rank_index++ )); do
+        _zsuggestion_candidate_rank \
+          "${_ZSUGGESTION_MENU_KINDS[$rank_index]}" \
+          "${_ZSUGGESTION_MENU_SOURCES[$rank_index]}"
+        ranks+=("$REPLY")
+      done
+      perm=()
+      for (( rank_index = 1; rank_index <= ${#ranks}; rank_index++ )); do
+        perm+=("$rank_index")
+      done
+      for (( rank_index = 2; rank_index <= ${#perm}; rank_index++ )); do
+        moving="${perm[$rank_index]}"
+        moving_rank="${ranks[$moving]}"
+        for (( inner_index = rank_index - 1; inner_index >= 1; inner_index-- )); do
+          other="${perm[$inner_index]}"
+          other_rank="${ranks[$other]}"
+          (( other_rank <= moving_rank )) && break
+          perm[inner_index+1]="$other"
+        done
+        perm[inner_index+1]="$moving"
+      done
+      for (( rank_index = 1; rank_index <= ${#perm}; rank_index++ )); do
+        other="${perm[$rank_index]}"
+        sorted_accepts+=("${_ZSUGGESTION_MENU_ACCEPTS[$other]}")
+        sorted_displays+=("${_ZSUGGESTION_MENU_DISPLAYS[$other]}")
+        sorted_descriptions+=("${_ZSUGGESTION_MENU_DESCRIPTIONS[$other]}")
+        sorted_kinds+=("${_ZSUGGESTION_MENU_KINDS[$other]}")
+        sorted_sources+=("${_ZSUGGESTION_MENU_SOURCES[$other]}")
+      done
+      _ZSUGGESTION_MENU_ACCEPTS=("${sorted_accepts[@]}")
+      _ZSUGGESTION_MENU_DISPLAYS=("${sorted_displays[@]}")
+      _ZSUGGESTION_MENU_DESCRIPTIONS=("${sorted_descriptions[@]}")
+      _ZSUGGESTION_MENU_KINDS=("${sorted_kinds[@]}")
+      _ZSUGGESTION_MENU_SOURCES=("${sorted_sources[@]}")
+    fi
   }
 
   # Appends native candidates to the menu rows within the $1 row budget.
@@ -1080,46 +1131,7 @@ if [[ -o interactive ]] && (( $+commands[zsuggestion] )); then
 
     _zsuggestion_menu_merge_native $limit
 
-    if (( ${#_ZSUGGESTION_MENU_ACCEPTS} > 1 )); then
-      local -a ranks perm sorted_accepts sorted_displays sorted_descriptions sorted_kinds sorted_sources
-      integer rank_index inner_index moving moving_rank other other_rank
-      ranks=()
-      for (( rank_index = 1; rank_index <= ${#_ZSUGGESTION_MENU_KINDS}; rank_index++ )); do
-        _zsuggestion_candidate_rank \
-          "${_ZSUGGESTION_MENU_KINDS[$rank_index]}" \
-          "${_ZSUGGESTION_MENU_SOURCES[$rank_index]}"
-        ranks+=("$REPLY")
-      done
-      perm=()
-      for (( rank_index = 1; rank_index <= ${#ranks}; rank_index++ )); do
-        perm+=("$rank_index")
-      done
-      for (( rank_index = 2; rank_index <= ${#perm}; rank_index++ )); do
-        moving="${perm[$rank_index]}"
-        moving_rank="${ranks[$moving]}"
-        for (( inner_index = rank_index - 1; inner_index >= 1; inner_index-- )); do
-          other="${perm[$inner_index]}"
-          other_rank="${ranks[$other]}"
-          (( other_rank <= moving_rank )) && break
-          perm[inner_index+1]="$other"
-        done
-        perm[inner_index+1]="$moving"
-      done
-      for (( rank_index = 1; rank_index <= ${#perm}; rank_index++ )); do
-        other="${perm[$rank_index]}"
-        sorted_accepts+=("${_ZSUGGESTION_MENU_ACCEPTS[$other]}")
-        sorted_displays+=("${_ZSUGGESTION_MENU_DISPLAYS[$other]}")
-        sorted_descriptions+=("${_ZSUGGESTION_MENU_DESCRIPTIONS[$other]}")
-        sorted_kinds+=("${_ZSUGGESTION_MENU_KINDS[$other]}")
-        sorted_sources+=("${_ZSUGGESTION_MENU_SOURCES[$other]}")
-      done
-      _ZSUGGESTION_MENU_ACCEPTS=("${sorted_accepts[@]}")
-      _ZSUGGESTION_MENU_DISPLAYS=("${sorted_displays[@]}")
-      _ZSUGGESTION_MENU_DESCRIPTIONS=("${sorted_descriptions[@]}")
-      _ZSUGGESTION_MENU_KINDS=("${sorted_kinds[@]}")
-      _ZSUGGESTION_MENU_SOURCES=("${sorted_sources[@]}")
-    fi
-
+    _zsuggestion_menu_sort
 
     _ZSUGGESTION_MENU_RESTORE_INDEX=$_ZSUGGESTION_MENU_INDEX
     zstyle -a zle-line-pre-redraw widgets redraw_hooks
