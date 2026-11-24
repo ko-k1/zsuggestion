@@ -181,6 +181,43 @@ merge 'git commit --a' 'git commit --all' 'git commit --amend' 'git commit --ame
     }
 
     #[test]
+    fn native_structured_rows_rank_above_filesystem_rows() {
+        let Ok(zsh) = which_zsh() else { return };
+        let integration = zsh_integration(&Settings::default()).unwrap();
+        let start = integration
+            .find("  _zsuggestion_candidate_rank() {")
+            .unwrap();
+        let end = integration
+            .find("  # Appends native candidates to the menu rows")
+            .unwrap();
+        // `git switch ` gets files and directories from the daemon and
+        // flags, branches, and subcommands only from native completion.
+        let script = format!(
+            r#"{helpers}
+_ZSUGGESTION_MENU_DISPLAYS=(src/ notes.md main.rs old --create main --track cmd ghost)
+_ZSUGGESTION_MENU_KINDS=(directory file file history option value option subcommand native)
+_ZSUGGESTION_MENU_SOURCES=(filesystem filesystem filesystem history native native native native native)
+_ZSUGGESTION_MENU_ACCEPTS=("${{_ZSUGGESTION_MENU_DISPLAYS[@]}}")
+_ZSUGGESTION_MENU_DESCRIPTIONS=("${{_ZSUGGESTION_MENU_DISPLAYS[@]}}")
+_zsuggestion_menu_sort
+print -r -- "${{(j:,:)_ZSUGGESTION_MENU_DISPLAYS}}"
+print -r -- "${{(j:,:)_ZSUGGESTION_MENU_ACCEPTS}}"
+"#,
+            helpers = &integration[start..end]
+        );
+        let output = std::process::Command::new(zsh)
+            .args(["-f", "-c", &script])
+            .output()
+            .unwrap();
+        assert!(output.status.success(), "{output:?}");
+        let order = "--create,main,--track,cmd,src/,notes.md,main.rs,ghost,old\n";
+        assert_eq!(
+            String::from_utf8(output.stdout).unwrap(),
+            format!("{order}{order}")
+        );
+    }
+
+    #[test]
     fn zsh_syntax_check_matches_daemon() {
         let Ok(zsh) = which_zsh() else { return };
         let integration = zsh_integration(&Settings::default()).unwrap();

@@ -25,6 +25,9 @@ headings that have no entries for a release.
 
 ### Fixed
 
+- Subcommands, flags, and values from Zsh completion (for example branches and
+  `--create` after `git switch `) are listed above directories and files again
+  instead of below them.
 - The menu no longer stops at `max_candidates` rows of the first matching kind:
   directories, files, and history still appear after a full list of commands,
   subcommands, or options. History remains the bottom presentation tier and
