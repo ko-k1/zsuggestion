@@ -39,6 +39,10 @@ if [[ -o interactive ]] && (( $+commands[zsuggestion] )); then
   typeset -g _ZSUGGESTION_FUZZY_QUERY=""
   typeset -g _ZSUGGESTION_FUZZY_KEYTIMEOUT=-1
   typeset -g _ZSUGGESTION_FUZZY_PREVIOUS_KEYMAP=""
+  # "all" for Space Space (history and commands), "history" for Ctrl-R.
+  typeset -g _ZSUGGESTION_FUZZY_SCOPE=all
+  typeset -g _ZSUGGESTION_FUZZY_ORIGINAL=""
+  typeset -gi _ZSUGGESTION_FUZZY_ORIGINAL_CURSOR=0
   typeset -g _ZSUGGESTION_PREVIEW_FD=-1
   typeset -g _ZSUGGESTION_PREVIEW_PID=-1
   typeset -g _ZSUGGESTION_PREVIEW_TICKS=0
@@ -259,6 +263,9 @@ if [[ -o interactive ]] && (( $+commands[zsuggestion] )); then
     _ZSUGGESTION_FUZZY_QUERY=""
     _ZSUGGESTION_FUZZY_KEYTIMEOUT=-1
     _ZSUGGESTION_FUZZY_PREVIOUS_KEYMAP=""
+    _ZSUGGESTION_FUZZY_SCOPE=all
+    _ZSUGGESTION_FUZZY_ORIGINAL=""
+    _ZSUGGESTION_FUZZY_ORIGINAL_CURSOR=0
   }
 
   _zsuggestion_menu_clear() {
@@ -297,18 +304,22 @@ if [[ -o interactive ]] && (( $+commands[zsuggestion] )); then
     fi
   }
 
+  # Usage: _zsuggestion_fuzzy_start SCOPE BASE QUERY. The line becomes
+  # BASE followed by the editable QUERY; Escape restores the current line.
   _zsuggestion_fuzzy_start() {
-    (( CURSOR == ${#BUFFER} )) || return 1
+    _ZSUGGESTION_FUZZY_ORIGINAL="$BUFFER"
+    _ZSUGGESTION_FUZZY_ORIGINAL_CURSOR=$CURSOR
     _ZSUGGESTION_FUZZY_KEYTIMEOUT=$KEYTIMEOUT
     _ZSUGGESTION_FUZZY_PREVIOUS_KEYMAP="$KEYMAP"
     KEYTIMEOUT=1
     _ZSUGGESTION_FUZZY_ACTIVE=1
     zle -K zsuggestion-fuzzy
-    _ZSUGGESTION_FUZZY_BASE="$BUFFER"
-    _ZSUGGESTION_FUZZY_QUERY=""
-    _ZSUGGESTION_MENU_BUFFER="$BUFFER"
-    _zsuggestion_menu_schedule
-    _zsuggestion_menu_render
+    _ZSUGGESTION_FUZZY_SCOPE="$1"
+    _ZSUGGESTION_FUZZY_BASE="$2"
+    _ZSUGGESTION_FUZZY_QUERY="$3"
+    _ZSUGGESTION_MENU_INDEX=1
+    _ZSUGGESTION_MENU_START=1
+    _zsuggestion_fuzzy_refresh
   }
 
   _zsuggestion_fuzzy_refresh() {
@@ -501,6 +512,11 @@ if [[ -o interactive ]] && (( $+commands[zsuggestion] )); then
         local query_start=${#_ZSUGGESTION_FUZZY_BASE}
         region_highlight+=("$query_start ${#input} fg=__ZSUGGESTION_UI_ACCENT__,bold memo=zsuggestion")
       fi
+      # Keep Ctrl-R search visible while nothing matches.
+      if (( _ZSUGGESTION_FUZZY_ACTIVE )) && [[ "$_ZSUGGESTION_FUZZY_SCOPE" == history ]]; then
+        POSTDISPLAY="  ${history_icon} no history matches"
+        region_highlight+=("${#input} $(( ${#input} + ${#POSTDISPLAY} )) fg=__ZSUGGESTION_UI_MUTED__ memo=zsuggestion")
+      fi
       _ZSUGGESTION_MENU_OWNS_DISPLAY=1
       return 0
     fi
@@ -670,7 +686,12 @@ if [[ -o interactive ]] && (( $+commands[zsuggestion] )); then
       fi
     done
 
-    if (( _ZSUGGESTION_FUZZY_ACTIVE )); then
+    if (( _ZSUGGESTION_FUZZY_ACTIVE )) && [[ "$_ZSUGGESTION_FUZZY_SCOPE" == history ]]; then
+      local footer=" History ${separator} Esc exit ${separator} C-R down ${separator} C-K up ${separator} Tab edit ${separator} Enter run "
+      line_start=$(( ${#input} + ${#POSTDISPLAY} + 1 + indent ))
+      POSTDISPLAY+=$'\n'"${padding}${footer}"
+      region_highlight+=("$line_start $(( line_start + ${#footer} )) fg=__ZSUGGESTION_UI_MUTED__ memo=zsuggestion")
+    elif (( _ZSUGGESTION_FUZZY_ACTIVE )); then
       local footer=" Esc exit ${separator} C-K up ${separator} C-N down ${separator} Tab choose ${separator} Enter run "
       line_start=$(( ${#input} + ${#POSTDISPLAY} + 1 + indent ))
       POSTDISPLAY+=$'\n'"${padding}${footer}"
@@ -1547,7 +1568,8 @@ if [[ -o interactive ]] && (( $+commands[zsuggestion] )); then
     buffer="$_ZSUGGESTION_MENU_REQUEST_BUFFER"
     cwd="$_ZSUGGESTION_MENU_REQUEST_CWD"
     cursor="$_ZSUGGESTION_MENU_REQUEST_CURSOR"
-    if [[ -z "$buffer" ]]; then
+    # History search lists recent commands before anything is typed.
+    if [[ -z "$buffer" ]] && (( ! _ZSUGGESTION_FUZZY_ACTIVE )); then
       return 0
     fi
 
@@ -1558,6 +1580,7 @@ if [[ -o interactive ]] && (( $+commands[zsuggestion] )); then
     if (( _ZSUGGESTION_FUZZY_ACTIVE )); then
       exec {query_fd}< <(command zsuggestion fuzzy \
         --query "$_ZSUGGESTION_FUZZY_QUERY" \
+        --scope "$_ZSUGGESTION_FUZZY_SCOPE" \
         --cwd "$cwd" \
         --format zsh-v3 2>/dev/null)
     else
@@ -1648,7 +1671,7 @@ if [[ -o interactive ]] && (( $+commands[zsuggestion] )); then
     fi
     if [[ "$LBUFFER" == *" " ]] && (( CURSOR == ${#BUFFER} )); then
       LBUFFER="${LBUFFER% }"
-      _zsuggestion_fuzzy_start
+      _zsuggestion_fuzzy_start all "$BUFFER" ""
       return
     fi
     zle _zsuggestion-native-space
@@ -1660,6 +1683,8 @@ if [[ -o interactive ]] && (( $+commands[zsuggestion] )); then
       if [[ -n "$_ZSUGGESTION_FUZZY_QUERY" ]]; then
         _ZSUGGESTION_FUZZY_QUERY="${_ZSUGGESTION_FUZZY_QUERY[1,-2]}"
         _zsuggestion_fuzzy_refresh
+      elif [[ "$_ZSUGGESTION_FUZZY_SCOPE" == history ]]; then
+        zle beep
       else
         _zsuggestion_menu_clear
         zle _zsuggestion-native-backward-delete
@@ -1744,6 +1769,27 @@ if [[ -o interactive ]] && (( $+commands[zsuggestion] )); then
     fi
   }
 
+  # Ctrl-R: fuzzy-search shared history in the completion popup, like fzf's
+  # history widget. The current line seeds the query and Escape restores it.
+  # Pressing it again moves down the list; from Space Space search it narrows
+  # the same query to history.
+  _zsuggestion_history_search() {
+    if (( _ZSUGGESTION_FUZZY_ACTIVE )); then
+      if [[ "$_ZSUGGESTION_FUZZY_SCOPE" == history ]]; then
+        _zsuggestion_menu_down
+      else
+        _ZSUGGESTION_FUZZY_SCOPE=history
+        _ZSUGGESTION_MENU_INDEX=1
+        _ZSUGGESTION_MENU_START=1
+        _zsuggestion_fuzzy_refresh
+      fi
+      return
+    fi
+    _zsuggestion_menu_clear 1
+    POSTDISPLAY=""
+    _zsuggestion_fuzzy_start history "" "$BUFFER"
+  }
+
   _zsuggestion_fuzzy_execute() {
     if (( ! _ZSUGGESTION_FUZZY_ACTIVE || ! _ZSUGGESTION_MENU_ACTIVE )); then
       zle beep
@@ -1781,12 +1827,14 @@ if [[ -o interactive ]] && (( $+commands[zsuggestion] )); then
 
   _zsuggestion_escape() {
     if (( _ZSUGGESTION_FUZZY_ACTIVE )); then
-      local base="$_ZSUGGESTION_FUZZY_BASE"
+      local original="$_ZSUGGESTION_FUZZY_ORIGINAL"
+      local original_cursor=$_ZSUGGESTION_FUZZY_ORIGINAL_CURSOR
       _zsuggestion_menu_clear
-      BUFFER="$base"
-      CURSOR=${#BUFFER}
+      BUFFER="$original"
+      CURSOR=$original_cursor
       _ZSUGGESTION_MENU_BUFFER="$BUFFER"
-      [[ "$BUFFER" == *[![:space:]]* ]] && _zsuggestion_menu_schedule
+      [[ "$BUFFER" == *[![:space:]]* ]] && (( CURSOR == ${#BUFFER} )) &&
+        _zsuggestion_menu_schedule
       region_highlight=( "${_ZSUGGESTION_FOREIGN_HIGHLIGHTS[@]}" )
       zle -R
       return
@@ -2047,6 +2095,7 @@ if [[ -o interactive ]] && (( $+commands[zsuggestion] )); then
   bindkey '^I' zsuggestion-tab
   zle -N zsuggestion-complete _zsuggestion_complete
   zle -N zsuggestion-fuzzy-execute _zsuggestion_fuzzy_execute
+  zle -N zsuggestion-history-search _zsuggestion_history_search
   zle -N zsuggestion-menu-down _zsuggestion_menu_down
   zle -N zsuggestion-menu-up _zsuggestion_menu_up
   zle -N zsuggestion-shift-tab _zsuggestion_shift_tab
@@ -2075,6 +2124,7 @@ if [[ -o interactive ]] && (( $+commands[zsuggestion] )); then
   bindkey '^[OB' zsuggestion-history-down-application
   bindkey '^C' zsuggestion-interrupt
   bindkey ' ' zsuggestion-space
+  bindkey '^R' zsuggestion-history-search
   bindkey -N zsuggestion-fuzzy
   bindkey -M zsuggestion-fuzzy -R ' '-'~' self-insert
   bindkey -M zsuggestion-fuzzy ' ' zsuggestion-space
@@ -2091,6 +2141,7 @@ if [[ -o interactive ]] && (( $+commands[zsuggestion] )); then
   bindkey -M zsuggestion-fuzzy '^M' zsuggestion-fuzzy-execute
   bindkey -M zsuggestion-fuzzy '^C' zsuggestion-interrupt
   bindkey -M zsuggestion-fuzzy '^[' zsuggestion-escape
+  bindkey -M zsuggestion-fuzzy '^R' zsuggestion-history-search
 
   if [[ -n "${HISTFILE:-}" && -r "$HISTFILE" ]]; then
     command zsuggestion import-history --file "${HISTFILE:A}" >/dev/null 2>&1 &!

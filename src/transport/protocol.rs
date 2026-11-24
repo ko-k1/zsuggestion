@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-pub const PROTOCOL_VERSION: u32 = 9;
+pub const PROTOCOL_VERSION: u32 = 10;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct RequestEnvelope {
@@ -45,12 +45,27 @@ pub enum Request {
     Fuzzy {
         query: String,
         cwd: String,
-        /// Total candidate budget. Defaults to `completion.max_candidates`.
+        /// Total candidate budget. Defaults to `completion.max_candidates`,
+        /// or to the history-search budget for [`FuzzyScope::History`].
         limit: Option<usize>,
+        /// Which candidate pools to search.
+        #[serde(default)]
+        scope: FuzzyScope,
     },
     ImportHistory {
         path: String,
     },
+}
+
+/// Candidate pools searched by [`Request::Fuzzy`].
+#[derive(Debug, Clone, Copy, Default, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum FuzzyScope {
+    /// Shared history followed by installed commands (`Space Space`).
+    #[default]
+    All,
+    /// Shared history only (`Ctrl-R`).
+    History,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]

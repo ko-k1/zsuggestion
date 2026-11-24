@@ -151,7 +151,8 @@ src/
         filesystem.rs bounded path candidates
         history.rs   recorded-history candidates and path plausibility
         paths.rs     shared command/path classification
-    fuzzy/           fzf-ranked history and command search
+    fuzzy/           fzf-ranked history and command search (Space Space)
+                     and history-only search (Ctrl-R)
       mod.rs
   persistence/       SQLite history store and Zsh history import
     mod.rs           Store, HistoryCandidate, ImportResult, import

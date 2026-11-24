@@ -16,7 +16,8 @@ cargo install --path .
 
 zsuggestion is not yet published on crates.io, so install from a checkout.
 It targets Unix-like systems (Linux, macOS) and works best with `fzf`
-installed for fuzzy search over your history.
+installed for fuzzy search over your history; without it, search falls back to
+matching every typed word.
 
 ## Set up
 
@@ -40,6 +41,7 @@ As you type, a menu appears and highlights the best suggestion:
 | `Right / End / Ctrl-F / Ctrl-E` | Take the ghost preview text |
 | `Escape` | Dismiss the menu without changing your command |
 | `Space Space` | Enter fuzzy search over history and commands |
+| `Ctrl-R` | Search your history in the same menu; press again to move down |
 | `Enter` | Run your command as usual |
 
 Commands, flags, subcommands, values, files, and directories share the regular
@@ -48,6 +50,13 @@ alternative at the bottom, and a matching history row gives way to the regular
 suggestion. For simple command lines, commands that only accept directories,
 such as `cd`, only show directory candidates. You never need completion scripts
 for each tool.
+
+`Ctrl-R` replaces the shell's history search with the same menu: the line you
+have typed becomes the query, `Tab` puts the selected command on the line for
+editing, `Enter` runs it, and `Escape` restores what you had. The widget is
+`zsuggestion-history-search`; to keep your previous search on `Ctrl-R`, rebind
+it after the `eval` line, for example
+`bindkey '^R' history-incremental-search-backward`.
 
 ## Commands
 

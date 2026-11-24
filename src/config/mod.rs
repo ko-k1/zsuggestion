@@ -168,7 +168,7 @@ pub fn completion_key_sequence(key: &str) -> Result<String> {
             if letter.len() != 1 || !letter.as_bytes()[0].is_ascii_lowercase() {
                 bail!("completion.key must be ctrl-space or ctrl-a through ctrl-z");
             }
-            if matches!(letter, "i" | "j" | "k" | "m" | "n") {
+            if matches!(letter, "i" | "j" | "k" | "m" | "n" | "r") {
                 bail!("completion.key conflicts with a zsuggestion menu control");
             }
             Ok(format!("^{}", letter.to_ascii_uppercase()))
@@ -355,6 +355,7 @@ mod tests {
         assert!(completion_key_sequence("shift-tab").is_err());
         assert!(completion_key_sequence("ctrl-i").is_err());
         assert!(completion_key_sequence("ctrl-k").is_err());
+        assert!(completion_key_sequence("ctrl-r").is_err());
         assert!(completion_key_sequence("alt-space").is_err());
     }
 

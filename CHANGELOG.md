@@ -15,6 +15,10 @@ headings that have no entries for a release.
 
 ### Added
 
+- `Ctrl-R` searches your command history in the completion menu, styled like
+  the rest of zsuggestion: the typed line seeds the query, `Ctrl-R` again moves
+  down, `Tab` edits, `Enter` runs, and `Escape` restores the line. Fuzzy search
+  now also works without `fzf`, matching every typed word.
 - Repository documentation now includes a documentation index, vision, status,
   roadmap, architecture decision records, changelog, project policies, and
   generated agent guidance for the supported harnesses.

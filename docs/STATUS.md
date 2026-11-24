@@ -27,6 +27,8 @@ The current slice includes:
 - Prefix-only completion; Tab fills the highlighted candidate exactly.
 - Cursor-anchored, scrolling ZLE popup with ghost text, descriptions, kind
   badges, highlighted matches, a position scrollbar, and configurable colors.
+- `Ctrl-R` history search in the completion menu, ranked by `fzf` when
+  installed, with a built-in word matcher otherwise.
 - Conservative segment acceptance, explicit fuzzy mode, previews, and
   debounced asynchronous requests that never block character input.
 

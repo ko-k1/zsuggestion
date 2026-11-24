@@ -261,7 +261,12 @@ fn dispatch(
             };
             Ok(Response::Completion(completion))
         }
-        Request::Fuzzy { query, cwd, limit } => {
+        Request::Fuzzy {
+            query,
+            cwd,
+            limit,
+            scope,
+        } => {
             if cwd.len() > MAX_PATH_BYTES {
                 bail!("working directory is too long");
             }
@@ -271,6 +276,7 @@ fn dispatch(
                 &query,
                 &cwd,
                 limit,
+                scope,
                 settings,
             )?;
             Ok(Response::Completion(completion))
